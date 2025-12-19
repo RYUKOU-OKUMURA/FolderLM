@@ -11,6 +11,8 @@ import { NOTE_SELECTORS, UI_INJECTION_SELECTORS, FOLDERLM_CLASSES } from './util
 import { extractNoteIdFromCard, analyzePageNotes } from './utils/idParser.js';
 import { debounce, batchWithRAF, domBatchQueue } from './utils/debounce.js';
 import { storageManager } from '../storage/storageManager.js';
+import { noteDetector, DetectionStatus } from './core/noteDetector.js';
+import { safetyManager, SafetyState, ErrorType } from './core/safetyManager.js';
 
 /**
  * FolderLM アプリケーションクラス
@@ -22,6 +24,77 @@ class FolderLM {
     this.retryCount = 0;
     this.maxRetries = 3;
     this.retryDelay = 1000;
+
+    // noteDetector と safetyManager への参照
+    this.noteDetector = noteDetector;
+    this.safetyManager = safetyManager;
+
+    // エラーリスナーを設定
+    this._setupErrorListeners();
+  }
+
+  /**
+   * エラーリスナーを設定
+   */
+  _setupErrorListeners() {
+    // noteDetector のエラーを safetyManager に伝播
+    this.noteDetector.onError((error) => {
+      if (error.type === 'detection_failed') {
+        this.safetyManager.triggerSafeStop(
+          ErrorType.DETECTION_FAILED,
+          'ノートの検出に失敗しました。ページを再読み込みしてください。'
+        );
+      }
+    });
+
+    // storageManager のエラーを処理
+    storageManager.onError((error) => {
+      if (error.type === storageManager.ERROR_TYPES.QUOTA_EXCEEDED) {
+        this.safetyManager.triggerWarning(error.message);
+      } else if (error.type === storageManager.ERROR_TYPES.LOAD_FAILED) {
+        // ストレージ読み込み失敗は警告のみ（デフォルト値で動作継続）
+        this.safetyManager.showNotification(error.message, 'warning', 5000);
+      }
+    });
+
+    // safetyManager の状態変更を監視
+    this.safetyManager.onStateChange((oldState, newState, reason) => {
+      console.log(`[FolderLM] Safety state changed: ${oldState} -> ${newState}`);
+      if (newState === SafetyState.STOPPED) {
+        this._handleSafetyStop();
+      } else if (newState === SafetyState.ACTIVE && oldState === SafetyState.STOPPED) {
+        this._handleSafetyRecovery();
+      }
+    });
+  }
+
+  /**
+   * 安全停止時の処理
+   */
+  _handleSafetyStop() {
+    // DOM 監視を停止
+    if (this.observer) {
+      this.observer.disconnect();
+    }
+    console.log('[FolderLM] Application stopped due to safety concerns');
+  }
+
+  /**
+   * 安全停止からの復帰処理
+   */
+  async _handleSafetyRecovery() {
+    console.log('[FolderLM] Attempting recovery...');
+    
+    // ノート検出を再試行
+    const result = await this.noteDetector.scanNotes();
+    
+    if (result.status === DetectionStatus.SUCCESS || result.status === DetectionStatus.NO_NOTES) {
+      // DOM 監視を再開
+      this.startObserver();
+      // UI を再初期化
+      this.initUI();
+      console.log('[FolderLM] Recovery successful');
+    }
   }
 
   /**
@@ -37,40 +110,89 @@ class FolderLM {
 
     try {
       // 1. ストレージからデータを読み込み
-      await storageManager.load();
-      console.log('[FolderLM] Storage loaded');
+      try {
+        await storageManager.load();
+        console.log('[FolderLM] Storage loaded');
+      } catch (storageError) {
+        // ストレージエラーは警告のみで続行（デフォルト値で動作）
+        console.warn('[FolderLM] Storage load failed, using defaults:', storageError);
+      }
 
       // 2. DOM の準備を待つ
       const ready = await this.waitForDOM();
       if (!ready) {
         console.error('[FolderLM] DOM not ready after retries, stopping initialization');
-        this.showError('NotebookLM のページ構造を検出できませんでした。');
+        this.safetyManager.triggerSafeStop(
+          ErrorType.DOM_NOT_FOUND,
+          'NotebookLM のページ構造を検出できませんでした。'
+        );
         return;
       }
 
-      // 3. ノートIDの取得を検証
-      const analysis = analyzePageNotes();
-      console.log(`[FolderLM] Found ${analysis.total} notes, ${analysis.identified} identified`);
+      // 3. noteDetector を使用してノートを検出
+      const detectionResult = await this.noteDetector.initialize();
+      console.log(`[FolderLM] Note detection result:`, detectionResult);
 
-      if (analysis.total > 0 && analysis.identified === 0) {
-        console.error('[FolderLM] Could not identify any notes');
-        this.showError('ノートの識別に失敗しました。');
+      // 検出結果に応じた処理
+      if (detectionResult.status === DetectionStatus.FAILED) {
+        // すべてのノートの ID 取得に失敗した場合は安全停止
+        this.safetyManager.triggerSafeStop(
+          ErrorType.DETECTION_FAILED,
+          'ノートの識別に失敗しました。FolderLM は正常に動作できません。'
+        );
         return;
       }
 
-      // 4. UI を初期化（将来的にここで UI コンポーネントを挿入）
+      if (detectionResult.status === DetectionStatus.PARTIAL) {
+        // 一部失敗の場合は警告を表示して続行
+        this.safetyManager.triggerWarning(
+          `${detectionResult.failed}件のノートを識別できませんでした。一部の機能が制限される可能性があります。`
+        );
+      }
+
+      // 4. UI を初期化
       this.initUI();
 
       // 5. DOM 監視を開始
       this.startObserver();
+
+      // 6. noteDetector の変更イベントを購読
+      this._setupNoteDetectorEvents();
 
       this.initialized = true;
       console.log('[FolderLM] Initialization complete');
 
     } catch (error) {
       console.error('[FolderLM] Initialization failed:', error);
-      this.showError('初期化に失敗しました。');
+      this.safetyManager.triggerSafeStop(
+        ErrorType.UNKNOWN,
+        '初期化に失敗しました。ページを再読み込みしてください。'
+      );
     }
+  }
+
+  /**
+   * noteDetector のイベントハンドラを設定
+   */
+  _setupNoteDetectorEvents() {
+    this.noteDetector.onChange((event) => {
+      if (event.type === 'diff') {
+        const { added, removed } = event.data;
+        
+        // 新規ノートにフォルダ状態を適用
+        for (const noteId of added) {
+          const card = this.noteDetector.getCardByNoteId(noteId);
+          if (card) {
+            this.applyFolderState(card, noteId);
+          }
+        }
+
+        // 削除されたノートのクリーンアップ（必要に応じて）
+        if (removed.length > 0) {
+          console.log(`[FolderLM] ${removed.length} notes removed from view`);
+        }
+      }
+    });
   }
 
   /**
@@ -158,13 +280,24 @@ class FolderLM {
    * すべてのノートカードを処理
    */
   processNoteCards() {
-    const cards = document.querySelectorAll(NOTE_SELECTORS.CARD);
-    
-    cards.forEach(card => {
-      this.processNoteCard(card);
-    });
+    // safetyManager が停止状態なら処理しない
+    if (this.safetyManager.isStopped()) {
+      console.log('[FolderLM] Skipping processNoteCards - safety stopped');
+      return;
+    }
 
-    console.log(`[FolderLM] Processed ${cards.length} note cards`);
+    // noteDetector を使用して差分検出
+    const { added, removed } = this.noteDetector.detectChanges();
+    
+    // すべてのノートにフォルダ状態を適用
+    for (const noteId of this.noteDetector.getAllNoteIds()) {
+      const card = this.noteDetector.getCardByNoteId(noteId);
+      if (card) {
+        this.applyFolderState(card, noteId);
+      }
+    }
+
+    console.log(`[FolderLM] Processed ${this.noteDetector.count} note cards`);
   }
 
   /**
@@ -172,27 +305,21 @@ class FolderLM {
    * @param {Element} card - ノートカード要素
    */
   processNoteCard(card) {
-    // 処理済みの場合はスキップ
-    if (card.hasAttribute('data-folderlm-initialized')) {
+    // safetyManager が停止状態なら処理しない
+    if (this.safetyManager.isStopped()) {
       return;
     }
 
-    // ノートIDを取得
-    const noteId = extractNoteIdFromCard(card);
-    if (!noteId) {
+    // noteDetector を使用してカードを処理
+    const result = this.noteDetector.processCard(card);
+    
+    if (!result.success) {
       console.warn('[FolderLM] Could not extract note ID from card');
       return;
     }
 
-    // データ属性にノートIDを設定
-    card.setAttribute('data-folderlm-note-id', noteId);
-    card.setAttribute('data-folderlm-initialized', 'true');
-
-    // 割り当てボタンを追加（将来的に noteAssignButton.js で実装）
-    // this.addAssignButton(card, noteId);
-
     // フォルダ割り当て状態を反映
-    this.applyFolderState(card, noteId);
+    this.applyFolderState(card, result.noteId);
   }
 
   /**
@@ -216,6 +343,12 @@ class FolderLM {
    * DOM 監視を開始
    */
   startObserver() {
+    // safetyManager が停止状態なら開始しない
+    if (this.safetyManager.isStopped()) {
+      console.log('[FolderLM] Skipping observer start - safety stopped');
+      return;
+    }
+
     if (this.observer) {
       this.observer.disconnect();
     }
@@ -229,6 +362,11 @@ class FolderLM {
 
     // デバウンスされた処理
     const handleMutations = debounce((mutations) => {
+      // safetyManager が停止状態なら処理しない
+      if (this.safetyManager.isStopped()) {
+        return;
+      }
+
       let hasRelevantChanges = false;
 
       for (const mutation of mutations) {
@@ -247,7 +385,8 @@ class FolderLM {
 
       if (hasRelevantChanges) {
         domBatchQueue.add(() => {
-          this.processNoteCards();
+          // noteDetector にスキャンをリクエスト
+          this.noteDetector.requestScan();
           this.injectFolderButton();
         });
       }
@@ -265,7 +404,35 @@ class FolderLM {
    */
   showError(message) {
     console.error(`[FolderLM] Error: ${message}`);
-    // TODO: ユーザー向け通知 UI を実装
+    this.safetyManager.showNotification(message, 'error');
+  }
+
+  /**
+   * 警告メッセージを表示
+   * @param {string} message - 警告メッセージ
+   */
+  showWarning(message) {
+    console.warn(`[FolderLM] Warning: ${message}`);
+    this.safetyManager.showNotification(message, 'warning', 5000);
+  }
+
+  /**
+   * 情報メッセージを表示
+   * @param {string} message - 情報メッセージ
+   * @param {number} [duration=3000] - 表示時間（ミリ秒）
+   */
+  showInfo(message, duration = 3000) {
+    console.log(`[FolderLM] Info: ${message}`);
+    this.safetyManager.showNotification(message, 'info', duration);
+  }
+
+  /**
+   * 手動で復帰を試みる
+   */
+  async tryRecover() {
+    if (this.safetyManager.isStopped()) {
+      this.safetyManager.recover();
+    }
   }
 
   /**
@@ -286,6 +453,10 @@ class FolderLM {
       this.observer = null;
     }
 
+    // noteDetector と safetyManager をクリーンアップ
+    this.noteDetector.destroy();
+    this.safetyManager.destroy();
+
     document.body.classList.remove(FOLDERLM_CLASSES.INITIALIZED);
     
     // 追加した要素を削除
@@ -295,6 +466,25 @@ class FolderLM {
 
     this.initialized = false;
     console.log('[FolderLM] Destroyed');
+  }
+
+  /**
+   * デバッグ情報を出力
+   */
+  debug() {
+    console.group('[FolderLM] Debug Info');
+    console.log('Initialized:', this.initialized);
+    console.log('Safety state:', this.safetyManager.getState());
+    this.noteDetector.debug();
+    this.safetyManager.debug();
+    console.groupEnd();
+
+    return {
+      initialized: this.initialized,
+      safetyState: this.safetyManager.getState(),
+      noteDetector: this.noteDetector.debug(),
+      safetyManager: this.safetyManager.debug(),
+    };
   }
 }
 

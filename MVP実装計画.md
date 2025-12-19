@@ -41,11 +41,16 @@
 ---
 
 ## 4. ノート検出と ID 取得
-- [ ] `selectors.js` に安定セレクタを定義
-- [ ] `idParser.js` に UUID 抽出ロジックを実装（`aria-labelledby`）
-- [ ] フォールバックとして URL からの UUID 抽出を実装
-- [ ] `noteDetector.js` でノートカードと ID のマッピングを作成
-- [ ] 取得失敗時の安全停止（UI 非表示 + 通知）
+- [x] `selectors.js` に安定セレクタを定義
+- [x] `idParser.js` に UUID 抽出ロジックを実装（`aria-labelledby`）
+- [x] フォールバックとして URL からの UUID 抽出を実装
+- [x] `noteDetector.js` でノートカードと ID のマッピングを作成
+- [x] 取得失敗時の安全停止（UI 非表示 + 通知）
+
+**実装成果物:**
+- `src/content/core/noteDetector.js` - ノート検出とIDマッピング管理
+- `src/content/core/safetyManager.js` - 安全停止とユーザー通知管理
+- `src/content/index.js` - 統合と初期化フロー更新
 
 ---
 
