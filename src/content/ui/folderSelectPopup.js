@@ -9,6 +9,7 @@
 
 import { FOLDERLM_CLASSES } from '../utils/selectors.js';
 import { storageManager } from '../../storage/storageManager.js';
+import { createFocusTrap } from '../utils/focusTrap.js';
 
 /**
  * FolderSelectPopup クラス
@@ -52,6 +53,12 @@ class FolderSelectPopup {
      */
     this._focusedIndex = -1;
 
+    /**
+     * フォーカストラップインスタンス
+     * @type {FocusTrap|null}
+     */
+    this._focusTrap = null;
+
     // バインドされたイベントハンドラ
     this._boundHandleOutsideClick = this._handleOutsideClick.bind(this);
     this._boundHandleKeydown = this._handleKeydown.bind(this);
@@ -82,6 +89,12 @@ class FolderSelectPopup {
     this._positionPopup();
     this._addGlobalListeners();
 
+    // フォーカストラップを有効化
+    if (this.element) {
+      this._focusTrap = createFocusTrap(this.element);
+      this._focusTrap.activate(false);
+    }
+
     // 現在割り当てられているフォルダがあればそこにフォーカス
     const currentFolderId = storageManager.getNoteFolder(noteId);
     const folders = storageManager.getFolders();
@@ -98,6 +111,12 @@ class FolderSelectPopup {
    * ポップアップを閉じる
    */
   close() {
+    // フォーカストラップを無効化
+    if (this._focusTrap) {
+      this._focusTrap.deactivate(true);
+      this._focusTrap = null;
+    }
+
     this._removeGlobalListeners();
 
     if (this.element) {
@@ -158,8 +177,9 @@ class FolderSelectPopup {
   _render() {
     const popup = document.createElement('div');
     popup.className = FOLDERLM_CLASSES.SELECT_POPUP;
-    popup.setAttribute('role', 'listbox');
-    popup.setAttribute('aria-label', 'フォルダを選択');
+    popup.setAttribute('role', 'dialog');
+    popup.setAttribute('aria-label', 'フォルダ選択');
+    popup.setAttribute('aria-modal', 'false');
     popup.setAttribute('tabindex', '-1');
 
     // ヘッダー
@@ -204,6 +224,8 @@ class FolderSelectPopup {
   _createFolderList() {
     const list = document.createElement('ul');
     list.className = 'folderlm-select-popup__list';
+    list.setAttribute('role', 'listbox');
+    list.setAttribute('aria-label', 'フォルダリスト');
     list.style.cssText = `
       list-style: none;
       margin: 0;

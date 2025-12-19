@@ -82,9 +82,11 @@ class NoteAssignButton {
     const button = document.createElement('button');
     button.className = FOLDERLM_CLASSES.ASSIGN_BUTTON;
     button.setAttribute('type', 'button');
+    button.setAttribute('role', 'button');
     button.setAttribute('data-note-id', noteId);
     button.setAttribute('aria-label', 'フォルダに割り当て');
     button.setAttribute('title', 'フォルダに割り当て');
+    button.setAttribute('tabindex', '0');
 
     // アイコン
     const icon = document.createElement('span');

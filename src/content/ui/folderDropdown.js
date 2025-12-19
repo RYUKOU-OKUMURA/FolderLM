@@ -9,6 +9,7 @@
 
 import { FOLDERLM_CLASSES } from '../utils/selectors.js';
 import { storageManager } from '../../storage/storageManager.js';
+import { createFocusTrap } from '../utils/focusTrap.js';
 
 /**
  * ドロップダウンの状態
@@ -48,6 +49,9 @@ class FolderDropdown {
     /** @type {number} 現在フォーカスしているアイテムのインデックス */
     this._focusedIndex = -1;
 
+    /** @type {FocusTrap|null} フォーカストラップインスタンス */
+    this._focusTrap = null;
+
     // バインドされたイベントハンドラ
     this._boundHandleOutsideClick = this._handleOutsideClick.bind(this);
     this._boundHandleKeydown = this._handleKeydown.bind(this);
@@ -71,6 +75,12 @@ class FolderDropdown {
     this._positionDropdown();
     this._addGlobalListeners();
     
+    // フォーカストラップを有効化
+    if (this.element) {
+      this._focusTrap = createFocusTrap(this.element);
+      this._focusTrap.activate(false);
+    }
+    
     // 最初のアイテムにフォーカス
     requestAnimationFrame(() => {
       this._focusItem(0);
@@ -85,6 +95,12 @@ class FolderDropdown {
   close() {
     if (this._state === DropdownState.CLOSED) {
       return;
+    }
+
+    // フォーカストラップを無効化
+    if (this._focusTrap) {
+      this._focusTrap.deactivate(true);
+      this._focusTrap = null;
     }
 
     this._removeGlobalListeners();
@@ -195,7 +211,8 @@ class FolderDropdown {
     const dropdown = document.createElement('div');
     dropdown.className = FOLDERLM_CLASSES.FOLDER_DROPDOWN;
     dropdown.setAttribute('role', 'menu');
-    dropdown.setAttribute('aria-label', 'フォルダ一覧');
+    dropdown.setAttribute('aria-label', 'フォルダ管理メニュー');
+    dropdown.setAttribute('aria-orientation', 'vertical');
     dropdown.setAttribute('tabindex', '-1');
 
     // ヘッダー
@@ -236,6 +253,9 @@ class FolderDropdown {
     showAllBtn.className = 'folderlm-show-all-btn';
     showAllBtn.textContent = 'すべて';
     showAllBtn.title = 'フィルタを解除';
+    showAllBtn.setAttribute('role', 'menuitem');
+    showAllBtn.setAttribute('aria-label', 'すべてのノートを表示（フィルタ解除）');
+    showAllBtn.setAttribute('tabindex', '-1');
     showAllBtn.style.cssText = `
       padding: 4px 8px;
       border: none;
@@ -262,7 +282,8 @@ class FolderDropdown {
   _createFolderList() {
     const list = document.createElement('ul');
     list.className = 'folderlm-folder-list';
-    list.setAttribute('role', 'listbox');
+    list.setAttribute('role', 'group');
+    list.setAttribute('aria-label', 'フォルダ一覧');
 
     const folders = storageManager.getFolders();
     const noteCounts = storageManager.getFolderNoteCounts();
@@ -286,14 +307,15 @@ class FolderDropdown {
   _createFolderItem(folder, noteCount, index) {
     const item = document.createElement('li');
     item.className = 'folderlm-folder-item';
-    item.setAttribute('role', 'option');
+    item.setAttribute('role', 'menuitem');
     item.setAttribute('data-folder-id', folder.id);
     item.setAttribute('data-index', index.toString());
     item.setAttribute('tabindex', '-1');
+    item.setAttribute('aria-label', `${folder.name}（${noteCount}件のノート）`);
 
     if (this._selectedFolderId === folder.id) {
       item.classList.add('active');
-      item.setAttribute('aria-selected', 'true');
+      item.setAttribute('aria-current', 'true');
     }
 
     // アイコン
@@ -343,6 +365,9 @@ class FolderDropdown {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'folderlm-folder-create-btn';
+      btn.setAttribute('role', 'menuitem');
+      btn.setAttribute('aria-label', '新規フォルダを作成');
+      btn.setAttribute('tabindex', '-1');
       btn.style.cssText = `
         display: flex;
         align-items: center;
@@ -358,6 +383,7 @@ class FolderDropdown {
       const icon = document.createElement('span');
       icon.textContent = '➕';
       icon.style.marginRight = '12px';
+      icon.setAttribute('aria-hidden', 'true');
       btn.appendChild(icon);
 
       const text = document.createElement('span');
@@ -398,6 +424,7 @@ class FolderDropdown {
     const submitBtn = document.createElement('button');
     submitBtn.type = 'submit';
     submitBtn.textContent = '作成';
+    submitBtn.setAttribute('aria-label', 'フォルダを作成');
     submitBtn.style.cssText = `
       padding: 8px 12px;
       border: none;
@@ -414,6 +441,7 @@ class FolderDropdown {
     cancelBtn.type = 'button';
     cancelBtn.textContent = '✕';
     cancelBtn.title = 'キャンセル';
+    cancelBtn.setAttribute('aria-label', 'フォルダ作成をキャンセル');
     cancelBtn.style.cssText = `
       padding: 8px;
       border: none;

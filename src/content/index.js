@@ -14,6 +14,7 @@ import { storageManager } from '../storage/storageManager.js';
 import { noteDetector, DetectionStatus } from './core/noteDetector.js';
 import { safetyManager, SafetyState, ErrorType } from './core/safetyManager.js';
 import { filterManager } from './core/filterManager.js';
+import { domRecoveryManager } from './core/domRecoveryManager.js';
 import { folderButton } from './ui/folderButton.js';
 import { folderDropdown } from './ui/folderDropdown.js';
 import { noteAssignButton } from './ui/noteAssignButton.js';
@@ -42,6 +43,9 @@ class FolderLM {
 
     // フィルタマネージャーへの参照
     this.filterManager = filterManager;
+
+    // DOM復帰マネージャーへの参照
+    this.domRecoveryManager = domRecoveryManager;
 
     // エラーリスナーを設定
     this._setupErrorListeners();
@@ -167,16 +171,20 @@ class FolderLM {
       // 4. filterManager を初期化
       this.filterManager.initialize();
 
-      // 5. UI を初期化
+      // 5. domRecoveryManager を初期化
+      this.domRecoveryManager.initialize();
+      this._setupDOMRecoveryEvents();
+
+      // 6. UI を初期化
       this.initUI();
 
-      // 6. DOM 監視を開始
+      // 7. DOM 監視を開始
       this.startObserver();
 
-      // 7. noteDetector の変更イベントを購読
+      // 8. noteDetector の変更イベントを購読
       this._setupNoteDetectorEvents();
 
-      // 8. filterManager の変更イベントを購読
+      // 9. filterManager の変更イベントを購読
       this._setupFilterManagerEvents();
 
       this.initialized = true;
@@ -234,6 +242,45 @@ class FolderLM {
       } else if (event.type === 'notebooklm_filter_changed') {
         // NotebookLM 標準フィルタが変更された場合のログ
         console.log(`[FolderLM] NotebookLM filter changed to: ${event.filter}`);
+      }
+    });
+  }
+
+  /**
+   * domRecoveryManager のイベントハンドラを設定
+   */
+  _setupDOMRecoveryEvents() {
+    // 復帰処理を登録
+    this.domRecoveryManager.onRecovery(() => {
+      console.log('[FolderLM] DOM recovery triggered');
+      
+      // safetyManager が停止状態なら復帰しない
+      if (this.safetyManager.isStopped()) {
+        console.log('[FolderLM] Skipping recovery - safety stopped');
+        return;
+      }
+
+      // UI を再初期化
+      domBatchQueue.add(() => {
+        // フォルダボタンを再注入
+        this.injectFolderButton();
+        
+        // ノートカードを再処理
+        this.processNoteCards();
+        
+        // フィルタを再適用
+        this.filterManager.reapplyFilter();
+        
+        console.log('[FolderLM] DOM recovery completed');
+      });
+    });
+
+    // 可視性変更を監視
+    this.domRecoveryManager.onVisibilityChange((isVisible) => {
+      if (isVisible) {
+        console.log('[FolderLM] Tab visible - checking DOM state');
+      } else {
+        console.log('[FolderLM] Tab hidden - pausing some operations');
       }
     });
   }
@@ -535,9 +582,11 @@ class FolderLM {
 
     const targetNode = document.body;
     const config = {
-      childList: true,
-      subtree: true,
-      attributes: false,
+      childList: true,      // 子ノードの追加・削除を監視
+      subtree: true,        // 全ての子孫ノードを監視
+      attributes: true,     // 属性の変更を監視
+      attributeFilter: ['class', 'style', 'hidden'], // 特定の属性のみ監視
+      characterData: false, // テキストノードの変更は監視しない
     };
 
     // デバウンスされた処理
@@ -548,6 +597,7 @@ class FolderLM {
       }
 
       let hasRelevantChanges = false;
+      let hasStructuralChanges = false;
 
       for (const mutation of mutations) {
         if (mutation.type === 'childList') {
@@ -558,11 +608,46 @@ class FolderLM {
                 hasRelevantChanges = true;
                 break;
               }
+              // アクションバーや大きなコンテナの変更を検出
+              if (node.matches?.(UI_INJECTION_SELECTORS.ACTION_BAR) || 
+                  node.querySelector?.(UI_INJECTION_SELECTORS.ACTION_BAR)) {
+                hasStructuralChanges = true;
+              }
+            }
+          }
+
+          // 削除されたノードもチェック
+          for (const node of mutation.removedNodes) {
+            if (node instanceof Element) {
+              // フォルダボタンが削除されたか確認
+              if (node.matches?.(`.${FOLDERLM_CLASSES.FOLDER_BUTTON}`) ||
+                  node.querySelector?.(`.${FOLDERLM_CLASSES.FOLDER_BUTTON}`)) {
+                hasStructuralChanges = true;
+              }
+            }
+          }
+        } else if (mutation.type === 'attributes') {
+          // 属性変更で要素が非表示になった場合など
+          const target = mutation.target;
+          if (target instanceof Element) {
+            // アクションバーが非表示になった場合
+            if (target.matches?.(UI_INJECTION_SELECTORS.ACTION_BAR)) {
+              if (target.hasAttribute('hidden') || target.style.display === 'none') {
+                hasStructuralChanges = true;
+              }
             }
           }
         }
       }
 
+      // 構造的な変更があった場合は復帰チェック
+      if (hasStructuralChanges) {
+        domBatchQueue.add(() => {
+          this.domRecoveryManager.requestRecovery();
+        });
+      }
+
+      // ノートカードの変更があった場合
       if (hasRelevantChanges) {
         domBatchQueue.add(() => {
           // noteDetector にスキャンをリクエスト
@@ -655,10 +740,11 @@ class FolderLM {
     this.noteAssignButton.destroy();
     this.folderSelectPopup.destroy();
 
-    // noteDetector, safetyManager, filterManager をクリーンアップ
+    // noteDetector, safetyManager, filterManager, domRecoveryManager をクリーンアップ
     this.noteDetector.destroy();
     this.safetyManager.destroy();
     this.filterManager.destroy();
+    this.domRecoveryManager.destroy();
 
     document.body.classList.remove(FOLDERLM_CLASSES.INITIALIZED);
     
@@ -692,6 +778,7 @@ class FolderLM {
       noteDetector: this.noteDetector.debug(),
       safetyManager: this.safetyManager.debug(),
       filterManager: this.filterManager.debug(),
+      domRecoveryManager: this.domRecoveryManager.debug(),
       folders: storageManager.getFolders(),
     };
   }

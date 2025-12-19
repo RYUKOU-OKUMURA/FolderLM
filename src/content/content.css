@@ -25,30 +25,31 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   padding: 0;
-  margin-left: 8px;
+  margin: 0 4px;
   border: none;
   border-radius: 50%;
   background-color: transparent;
   cursor: pointer;
-  font-size: 18px;
+  font-size: 20px;
   line-height: 1;
-  transition: background-color 0.15s ease, color 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
 }
 
 .folderlm-folder-button:hover {
   background-color: rgba(0, 0, 0, 0.08);
 }
 
-.folderlm-folder-button:focus {
+.folderlm-folder-button:focus-visible {
   outline: 2px solid #1a73e8;
   outline-offset: 2px;
 }
 
 .folderlm-folder-button:active {
   background-color: rgba(0, 0, 0, 0.12);
+  transform: scale(0.95);
 }
 
 /* フィルタアクティブ状態 */
@@ -107,14 +108,14 @@
   top: 100%;
   right: 0;
   z-index: 1000;
-  min-width: 200px;
-  max-width: 300px;
-  max-height: 400px;
-  margin-top: 4px;
-  padding: 8px 0;
+  min-width: 220px;
+  max-width: 320px;
+  max-height: 420px;
+  margin-top: 8px;
+  padding: 4px 0;
   background-color: #fff;
   border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 0 1px 3px rgba(0, 0, 0, 0.08);
   overflow-y: auto;
 }
 
@@ -122,10 +123,11 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 16px;
-  border-bottom: 1px solid #e0e0e0;
-  font-size: 14px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e8eaed;
+  font-size: 13px;
   font-weight: 500;
+  color: #5f6368;
 }
 
 .folderlm-folder-list {
@@ -140,6 +142,7 @@
   padding: 10px 16px;
   cursor: pointer;
   transition: background-color 0.15s ease;
+  min-height: 44px;
 }
 
 .folderlm-folder-item:hover {
@@ -175,9 +178,10 @@
   display: flex;
   align-items: center;
   padding: 10px 16px;
-  border-top: 1px solid #e0e0e0;
-  margin-top: 8px;
+  border-top: 1px solid #e8eaed;
+  margin-top: 4px;
   cursor: pointer;
+  min-height: 44px;
 }
 
 .folderlm-folder-create:hover {
@@ -186,16 +190,17 @@
 
 .folderlm-folder-create-input {
   flex: 1;
-  padding: 8px 12px;
+  padding: 10px 12px;
   border: 1px solid #dadce0;
   border-radius: 4px;
   font-size: 14px;
   outline: none;
+  line-height: 1.5;
 }
 
 .folderlm-folder-create-input:focus {
   border-color: #1a73e8;
-  box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.2);
+  box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.15);
 }
 
 /* ダークモード対応 */
@@ -238,20 +243,20 @@
 
 .folderlm-assign-button {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 12px;
+  right: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   padding: 0;
   border: none;
   border-radius: 50%;
   background-color: rgba(255, 255, 255, 0.95);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
   cursor: pointer;
-  font-size: 14px;
+  font-size: 16px;
   opacity: 0;
   transition: opacity 0.2s ease, background-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
   z-index: 10;
@@ -269,7 +274,7 @@
   box-shadow: 0 3px 8px rgba(0, 0, 0, 0.2);
 }
 
-.folderlm-assign-button:focus {
+.folderlm-assign-button:focus-visible {
   outline: 2px solid #1a73e8;
   outline-offset: 2px;
   opacity: 1;
@@ -326,22 +331,22 @@
 .folderlm-select-popup {
   position: fixed;
   z-index: 1001;
-  min-width: 200px;
-  max-width: 280px;
+  min-width: 220px;
+  max-width: 300px;
   background-color: #fff;
   border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.08);
   overflow: hidden;
 }
 
 .folderlm-select-popup__header {
-  padding: 10px 16px;
-  border-bottom: 1px solid #e0e0e0;
-  font-size: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e8eaed;
+  font-size: 11px;
   font-weight: 500;
   color: #5f6368;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.8px;
 }
 
 .folderlm-select-popup__list {
@@ -355,18 +360,20 @@
 .folderlm-select-popup-item {
   display: flex;
   align-items: center;
-  padding: 10px 16px;
+  padding: 12px 16px;
   cursor: pointer;
   font-size: 14px;
   transition: background-color 0.15s ease;
+  min-height: 44px;
 }
 
 .folderlm-select-popup-item:hover {
   background-color: rgba(0, 0, 0, 0.05);
 }
 
-.folderlm-select-popup-item:focus {
-  outline: none;
+.folderlm-select-popup-item:focus-visible {
+  outline: 2px solid #1a73e8;
+  outline-offset: -2px;
   background-color: rgba(26, 115, 232, 0.08);
 }
 
@@ -440,13 +447,14 @@
 .folderlm-folder-badge {
   display: inline-flex;
   align-items: center;
-  padding: 3px 10px;
-  margin-top: 6px;
+  padding: 4px 10px;
+  margin-top: 8px;
   background-color: rgba(26, 115, 232, 0.12);
   border-radius: 12px;
-  font-size: 11px;
+  font-size: 12px;
   color: #1a73e8;
-  max-width: 150px;
+  max-width: 160px;
+  line-height: 1.4;
 }
 
 .folderlm-folder-badge-icon {
@@ -503,12 +511,20 @@
    ========================================================================== */
 
 /* キーボードフォーカス表示を強化 */
-.folderlm-folder-button:focus-visible,
-.folderlm-assign-button:focus-visible,
-.folderlm-folder-item:focus-visible,
-.folderlm-select-popup-item:focus-visible {
+.folderlm-folder-button:focus-visible {
   outline: 2px solid #1a73e8;
   outline-offset: 2px;
+}
+
+.folderlm-assign-button:focus-visible {
+  outline: 2px solid #1a73e8;
+  outline-offset: 2px;
+}
+
+.folderlm-folder-item:focus-visible {
+  outline: 2px solid #1a73e8;
+  outline-offset: -2px;
+  background-color: rgba(26, 115, 232, 0.08);
 }
 
 /* スクリーンリーダー用の非表示テキスト */
@@ -530,13 +546,25 @@
 
 @media (max-width: 600px) {
   .folderlm-folder-dropdown {
-    min-width: 160px;
+    min-width: 180px;
     max-width: 90vw;
   }
 
   .folderlm-folder-button {
+    width: 36px;
+    height: 36px;
+    font-size: 18px;
+  }
+
+  .folderlm-assign-button {
     width: 32px;
     height: 32px;
-    font-size: 16px;
+    font-size: 14px;
+  }
+
+  .folderlm-folder-item,
+  .folderlm-select-popup-item {
+    min-height: 48px;
+    padding: 12px 16px;
   }
 }
