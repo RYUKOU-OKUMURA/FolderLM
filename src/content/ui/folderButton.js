@@ -59,9 +59,11 @@ class FolderButton {
     const button = document.createElement('button');
     button.className = FOLDERLM_CLASSES.FOLDER_BUTTON;
     button.setAttribute('type', 'button');
-    button.setAttribute('aria-label', 'フォルダ管理');
-    button.setAttribute('aria-haspopup', 'true');
+    button.setAttribute('role', 'button');
+    button.setAttribute('aria-label', 'フォルダ管理メニューを開く');
+    button.setAttribute('aria-haspopup', 'menu');
     button.setAttribute('aria-expanded', 'false');
+    button.setAttribute('tabindex', '0');
     button.title = 'FolderLM - フォルダ管理';
 
     // アイコンを設定
@@ -116,11 +118,12 @@ class FolderButton {
     this._isOpen = isOpen;
     if (this.element) {
       this.element.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+      this.element.setAttribute('aria-label', isOpen ? 'フォルダ管理メニューを閉じる' : 'フォルダ管理メニューを開く');
       
       // スクリーンリーダー用テキストを更新
       const srText = this.element.querySelector('.folderlm-sr-only');
       if (srText) {
-        srText.textContent = isOpen ? 'フォルダ管理を閉じる' : 'フォルダ管理を開く';
+        srText.textContent = isOpen ? 'フォルダ管理メニューを閉じる' : 'フォルダ管理メニューを開く';
       }
     }
   }

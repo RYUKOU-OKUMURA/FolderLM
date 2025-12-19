@@ -97,17 +97,29 @@
 ---
 
 ## 8. DOM 監視と再描画対応
-- [ ] `MutationObserver` の設定
-- [ ] 新規ノート追加/削除時の UI 再注入
-- [ ] タブ切替/再描画後の復帰処理
-- [ ] 更新処理のバッチ化（`requestAnimationFrame`）
+- [x] `MutationObserver` の設定
+- [x] 新規ノート追加/削除時の UI 再注入
+- [x] タブ切替/再描画後の復帰処理
+- [x] 更新処理のバッチ化（`requestAnimationFrame`）
+
+**実装成果物:**
+- `src/content/core/domRecoveryManager.js` - タブ切替・DOM再描画対応マネージャー
+- `src/content/index.js` - MutationObserver強化とdomRecoveryManager統合
 
 ---
 
 ## 9. アクセシビリティ/UX
-- [ ] ARIA ラベル付与
-- [ ] キーボード操作（フォーカス移動/決定/閉じる）
-- [ ] NotebookLM の UI に合わせた余白/高さ調整
+- [x] ARIA ラベル付与
+- [x] キーボード操作（フォーカス移動/決定/閉じる）
+- [x] NotebookLM の UI に合わせた余白/高さ調整
+
+**実装成果物:**
+- `src/content/utils/focusTrap.js` - フォーカストラップユーティリティ
+- `src/content/ui/folderButton.js` - ARIAラベル改善、tabindex追加
+- `src/content/ui/folderDropdown.js` - フォーカストラップ統合、ARIA改善
+- `src/content/ui/noteAssignButton.js` - ARIAラベル改善
+- `src/content/ui/folderSelectPopup.js` - フォーカストラップ統合、role改善
+- `src/content/content.css` - 余白・高さ調整、focus-visible対応
 
 ---
 
