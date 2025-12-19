@@ -13,6 +13,8 @@ import { debounce, batchWithRAF, domBatchQueue } from './utils/debounce.js';
 import { storageManager } from '../storage/storageManager.js';
 import { noteDetector, DetectionStatus } from './core/noteDetector.js';
 import { safetyManager, SafetyState, ErrorType } from './core/safetyManager.js';
+import { folderButton } from './ui/folderButton.js';
+import { folderDropdown } from './ui/folderDropdown.js';
 
 /**
  * FolderLM アプリケーションクラス
@@ -28,6 +30,13 @@ class FolderLM {
     // noteDetector と safetyManager への参照
     this.noteDetector = noteDetector;
     this.safetyManager = safetyManager;
+
+    // UI コンポーネントへの参照
+    this.folderButton = folderButton;
+    this.folderDropdown = folderDropdown;
+
+    // 現在選択中のフォルダ（フィルタ用）
+    this._selectedFolderId = null;
 
     // エラーリスナーを設定
     this._setupErrorListeners();
@@ -223,7 +232,10 @@ class FolderLM {
    */
   initUI() {
     // フォルダボタンをヘッダーに挿入
-    this.injectFolderButton();
+    this._setupFolderButton();
+
+    // フォルダドロップダウンのイベントを設定
+    this._setupFolderDropdown();
 
     // 既存のノートカードに割り当てボタンを追加
     this.processNoteCards();
@@ -235,45 +247,106 @@ class FolderLM {
   }
 
   /**
-   * フォルダボタンをヘッダーに挿入
+   * フォルダボタンを設定
+   * @private
    */
-  injectFolderButton() {
-    const actionBar = document.querySelector(UI_INJECTION_SELECTORS.ACTION_BAR) ||
-                     document.querySelector(UI_INJECTION_SELECTORS.ACTION_BAR_FALLBACK);
+  _setupFolderButton() {
+    // フォルダボタンを作成
+    this.folderButton.create();
 
-    if (!actionBar) {
-      console.warn('[FolderLM] Action bar not found, skipping folder button injection');
-      return;
-    }
-
-    // 既存のボタンがあれば何もしない
-    if (actionBar.querySelector(`.${FOLDERLM_CLASSES.FOLDER_BUTTON}`)) {
-      return;
-    }
-
-    // フォルダボタンを作成（将来的に folderButton.js に移動）
-    const button = document.createElement('button');
-    button.className = FOLDERLM_CLASSES.FOLDER_BUTTON;
-    button.setAttribute('aria-label', 'フォルダ');
-    button.setAttribute('type', 'button');
-    button.textContent = '📁';
-    button.title = 'FolderLM - フォルダ管理';
-
-    button.addEventListener('click', (e) => {
-      e.stopPropagation();
+    // クリックイベントを設定
+    this.folderButton.onClick(() => {
       this.toggleFolderDropdown();
     });
+  }
 
-    actionBar.appendChild(button);
-    console.log('[FolderLM] Folder button injected');
+  /**
+   * フォルダドロップダウンのイベントを設定
+   * @private
+   */
+  _setupFolderDropdown() {
+    // フォルダ選択時の処理
+    this.folderDropdown.onFolderSelect((folderId) => {
+      this._selectedFolderId = folderId;
+      this._applyFolderFilter(folderId);
+      console.log('[FolderLM] Folder selected:', folderId || 'all');
+    });
+
+    // フォルダ作成時の処理
+    this.folderDropdown.onFolderCreate((folder) => {
+      console.log('[FolderLM] Folder created:', folder.name);
+      this.showInfo(`フォルダ「${folder.name}」を作成しました`, 2000);
+    });
+
+    // ドロップダウンが閉じた時の処理
+    this.folderDropdown.onClose(() => {
+      this.folderButton.setOpen(false);
+    });
+  }
+
+  /**
+   * フォルダボタンをヘッダーに挿入（DOM 再描画後の復帰用）
+   */
+  injectFolderButton() {
+    this.folderButton.reinject();
   }
 
   /**
    * フォルダドロップダウンの表示/非表示を切り替え
    */
   toggleFolderDropdown() {
-    // TODO: 将来的に folderDropdown.js で実装
-    console.log('[FolderLM] Toggle folder dropdown');
+    const buttonElement = this.folderButton.getElement();
+    if (!buttonElement) {
+      console.warn('[FolderLM] Folder button not found');
+      return;
+    }
+
+    if (this.folderDropdown.isOpen()) {
+      this.folderDropdown.close();
+      this.folderButton.setOpen(false);
+    } else {
+      this.folderDropdown.setSelectedFolder(this._selectedFolderId);
+      this.folderDropdown.open(buttonElement);
+      this.folderButton.setOpen(true);
+    }
+  }
+
+  /**
+   * フォルダフィルタを適用
+   * @param {string|null} folderId - フォルダID（null で全表示）
+   * @private
+   */
+  _applyFolderFilter(folderId) {
+    const noteIds = this.noteDetector.getAllNoteIds();
+
+    for (const noteId of noteIds) {
+      const card = this.noteDetector.getCardByNoteId(noteId);
+      if (!card) continue;
+
+      const assignedFolderId = storageManager.getNoteFolder(noteId);
+      const isUncategorized = !assignedFolderId || assignedFolderId === storageManager.UNCATEGORIZED_ID;
+
+      // フィルタ条件の判定
+      let shouldShow = true;
+      if (folderId !== null) {
+        if (folderId === storageManager.UNCATEGORIZED_ID) {
+          // 未分類フィルタ: 未割り当てまたは未分類に割り当てられたノート
+          shouldShow = isUncategorized;
+        } else {
+          // 特定フォルダフィルタ: そのフォルダに割り当てられたノートのみ
+          shouldShow = assignedFolderId === folderId;
+        }
+      }
+
+      // 表示/非表示を切り替え
+      if (shouldShow) {
+        card.classList.remove(FOLDERLM_CLASSES.HIDDEN);
+      } else {
+        card.classList.add(FOLDERLM_CLASSES.HIDDEN);
+      }
+    }
+
+    console.log(`[FolderLM] Filter applied: ${folderId || 'all'}`);
   }
 
   /**
@@ -445,6 +518,24 @@ class FolderLM {
   }
 
   /**
+   * 現在選択中のフォルダIDを取得
+   * @returns {string|null}
+   */
+  getSelectedFolder() {
+    return this._selectedFolderId;
+  }
+
+  /**
+   * フォルダを選択（外部からの操作用）
+   * @param {string|null} folderId - フォルダID（null で全表示）
+   */
+  selectFolder(folderId) {
+    this._selectedFolderId = folderId;
+    this._applyFolderFilter(folderId);
+    this.folderDropdown.setSelectedFolder(folderId);
+  }
+
+  /**
    * アプリケーションを停止
    */
   destroy() {
@@ -452,6 +543,10 @@ class FolderLM {
       this.observer.disconnect();
       this.observer = null;
     }
+
+    // UI コンポーネントをクリーンアップ
+    this.folderButton.destroy();
+    this.folderDropdown.destroy();
 
     // noteDetector と safetyManager をクリーンアップ
     this.noteDetector.destroy();
@@ -482,8 +577,10 @@ class FolderLM {
     return {
       initialized: this.initialized,
       safetyState: this.safetyManager.getState(),
+      selectedFolderId: this._selectedFolderId,
       noteDetector: this.noteDetector.debug(),
       safetyManager: this.safetyManager.debug(),
+      folders: storageManager.getFolders(),
     };
   }
 }
