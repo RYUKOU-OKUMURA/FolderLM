@@ -21,6 +21,7 @@
    ========================================================================== */
 
 .folderlm-folder-button {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -34,7 +35,7 @@
   cursor: pointer;
   font-size: 18px;
   line-height: 1;
-  transition: background-color 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .folderlm-folder-button:hover {
@@ -50,6 +51,29 @@
   background-color: rgba(0, 0, 0, 0.12);
 }
 
+/* フィルタアクティブ状態 */
+.folderlm-folder-button.filter-active {
+  background-color: rgba(26, 115, 232, 0.15);
+  color: #1a73e8;
+}
+
+.folderlm-folder-button.filter-active:hover {
+  background-color: rgba(26, 115, 232, 0.25);
+}
+
+/* フィルタアクティブ状態のインジケーター */
+.folderlm-folder-button.filter-active::after {
+  content: '';
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 6px;
+  height: 6px;
+  background-color: #1a73e8;
+  border-radius: 50%;
+}
+
 /* ダークモード対応 */
 @media (prefers-color-scheme: dark) {
   .folderlm-folder-button:hover {
@@ -58,6 +82,19 @@
 
   .folderlm-folder-button:active {
     background-color: rgba(255, 255, 255, 0.12);
+  }
+
+  .folderlm-folder-button.filter-active {
+    background-color: rgba(138, 180, 248, 0.2);
+    color: #8ab4f8;
+  }
+
+  .folderlm-folder-button.filter-active:hover {
+    background-color: rgba(138, 180, 248, 0.3);
+  }
+
+  .folderlm-folder-button.filter-active::after {
+    background-color: #8ab4f8;
   }
 }
 

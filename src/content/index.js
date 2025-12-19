@@ -13,6 +13,7 @@ import { debounce, batchWithRAF, domBatchQueue } from './utils/debounce.js';
 import { storageManager } from '../storage/storageManager.js';
 import { noteDetector, DetectionStatus } from './core/noteDetector.js';
 import { safetyManager, SafetyState, ErrorType } from './core/safetyManager.js';
+import { filterManager } from './core/filterManager.js';
 import { folderButton } from './ui/folderButton.js';
 import { folderDropdown } from './ui/folderDropdown.js';
 import { noteAssignButton } from './ui/noteAssignButton.js';
@@ -39,8 +40,8 @@ class FolderLM {
     this.noteAssignButton = noteAssignButton;
     this.folderSelectPopup = folderSelectPopup;
 
-    // 現在選択中のフォルダ（フィルタ用）
-    this._selectedFolderId = null;
+    // フィルタマネージャーへの参照
+    this.filterManager = filterManager;
 
     // エラーリスナーを設定
     this._setupErrorListeners();
@@ -163,14 +164,20 @@ class FolderLM {
         );
       }
 
-      // 4. UI を初期化
+      // 4. filterManager を初期化
+      this.filterManager.initialize();
+
+      // 5. UI を初期化
       this.initUI();
 
-      // 5. DOM 監視を開始
+      // 6. DOM 監視を開始
       this.startObserver();
 
-      // 6. noteDetector の変更イベントを購読
+      // 7. noteDetector の変更イベントを購読
       this._setupNoteDetectorEvents();
+
+      // 8. filterManager の変更イベントを購読
+      this._setupFilterManagerEvents();
 
       this.initialized = true;
       console.log('[FolderLM] Initialization complete');
@@ -204,6 +211,29 @@ class FolderLM {
         if (removed.length > 0) {
           console.log(`[FolderLM] ${removed.length} notes removed from view`);
         }
+
+        // フィルタを再適用（新規ノートにもフィルタを適用するため）
+        this.filterManager.reapplyFilter();
+      }
+    });
+  }
+
+  /**
+   * filterManager のイベントハンドラを設定
+   */
+  _setupFilterManagerEvents() {
+    this.filterManager.onChange((event) => {
+      if (event.type === 'folder_selected') {
+        // フォルダボタンの状態を更新
+        this.folderButton.setFilterActive(event.isFilterActive);
+        
+        // ドロップダウンの選択状態を同期
+        this.folderDropdown.setSelectedFolder(event.selectedFolderId);
+
+        console.log(`[FolderLM] Filter state: ${event.isFilterActive ? 'active' : 'inactive'}`);
+      } else if (event.type === 'notebooklm_filter_changed') {
+        // NotebookLM 標準フィルタが変更された場合のログ
+        console.log(`[FolderLM] NotebookLM filter changed to: ${event.filter}`);
       }
     });
   }
@@ -277,8 +307,8 @@ class FolderLM {
   _setupFolderDropdown() {
     // フォルダ選択時の処理
     this.folderDropdown.onFolderSelect((folderId) => {
-      this._selectedFolderId = folderId;
-      this._applyFolderFilter(folderId);
+      // filterManager を使用してフィルタを適用
+      this.filterManager.selectFolder(folderId);
       console.log('[FolderLM] Folder selected:', folderId || 'all');
     });
 
@@ -327,9 +357,7 @@ class FolderLM {
       }
 
       // フィルタが適用されている場合、表示/非表示を更新
-      if (this._selectedFolderId !== null) {
-        this._applyFolderFilter(this._selectedFolderId);
-      }
+      this.filterManager.reapplyFilter();
 
       // フィードバック通知
       const folder = storageManager.getFolder(folderId);
@@ -360,48 +388,11 @@ class FolderLM {
       this.folderDropdown.close();
       this.folderButton.setOpen(false);
     } else {
-      this.folderDropdown.setSelectedFolder(this._selectedFolderId);
+      // filterManager から現在の選択状態を取得
+      this.folderDropdown.setSelectedFolder(this.filterManager.getSelectedFolderId());
       this.folderDropdown.open(buttonElement);
       this.folderButton.setOpen(true);
     }
-  }
-
-  /**
-   * フォルダフィルタを適用
-   * @param {string|null} folderId - フォルダID（null で全表示）
-   * @private
-   */
-  _applyFolderFilter(folderId) {
-    const noteIds = this.noteDetector.getAllNoteIds();
-
-    for (const noteId of noteIds) {
-      const card = this.noteDetector.getCardByNoteId(noteId);
-      if (!card) continue;
-
-      const assignedFolderId = storageManager.getNoteFolder(noteId);
-      const isUncategorized = !assignedFolderId || assignedFolderId === storageManager.UNCATEGORIZED_ID;
-
-      // フィルタ条件の判定
-      let shouldShow = true;
-      if (folderId !== null) {
-        if (folderId === storageManager.UNCATEGORIZED_ID) {
-          // 未分類フィルタ: 未割り当てまたは未分類に割り当てられたノート
-          shouldShow = isUncategorized;
-        } else {
-          // 特定フォルダフィルタ: そのフォルダに割り当てられたノートのみ
-          shouldShow = assignedFolderId === folderId;
-        }
-      }
-
-      // 表示/非表示を切り替え
-      if (shouldShow) {
-        card.classList.remove(FOLDERLM_CLASSES.HIDDEN);
-      } else {
-        card.classList.add(FOLDERLM_CLASSES.HIDDEN);
-      }
-    }
-
-    console.log(`[FolderLM] Filter applied: ${folderId || 'all'}`);
   }
 
   /**
@@ -638,7 +629,7 @@ class FolderLM {
    * @returns {string|null}
    */
   getSelectedFolder() {
-    return this._selectedFolderId;
+    return this.filterManager.getSelectedFolderId();
   }
 
   /**
@@ -646,9 +637,7 @@ class FolderLM {
    * @param {string|null} folderId - フォルダID（null で全表示）
    */
   selectFolder(folderId) {
-    this._selectedFolderId = folderId;
-    this._applyFolderFilter(folderId);
-    this.folderDropdown.setSelectedFolder(folderId);
+    this.filterManager.selectFolder(folderId);
   }
 
   /**
@@ -666,9 +655,10 @@ class FolderLM {
     this.noteAssignButton.destroy();
     this.folderSelectPopup.destroy();
 
-    // noteDetector と safetyManager をクリーンアップ
+    // noteDetector, safetyManager, filterManager をクリーンアップ
     this.noteDetector.destroy();
     this.safetyManager.destroy();
+    this.filterManager.destroy();
 
     document.body.classList.remove(FOLDERLM_CLASSES.INITIALIZED);
     
@@ -697,9 +687,11 @@ class FolderLM {
     return {
       initialized: this.initialized,
       safetyState: this.safetyManager.getState(),
-      selectedFolderId: this._selectedFolderId,
+      selectedFolderId: this.filterManager.getSelectedFolderId(),
+      filterActive: this.filterManager.isFilterActive(),
       noteDetector: this.noteDetector.debug(),
       safetyManager: this.safetyManager.debug(),
+      filterManager: this.filterManager.debug(),
       folders: storageManager.getFolders(),
     };
   }

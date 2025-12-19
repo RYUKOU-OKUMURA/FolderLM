@@ -23,6 +23,9 @@ class FolderButton {
     
     /** @type {boolean} ドロップダウンが開いているか */
     this._isOpen = false;
+
+    /** @type {boolean} フィルタがアクティブかどうか */
+    this._isFilterActive = false;
   }
 
   /**
@@ -145,6 +148,31 @@ class FolderButton {
     if (this.element) {
       this.element.focus();
     }
+  }
+
+  /**
+   * フィルタアクティブ状態を設定
+   * @param {boolean} isActive - フィルタがアクティブかどうか
+   */
+  setFilterActive(isActive) {
+    this._isFilterActive = isActive;
+    if (this.element) {
+      if (isActive) {
+        this.element.classList.add('filter-active');
+        this.element.setAttribute('data-filter-active', 'true');
+      } else {
+        this.element.classList.remove('filter-active');
+        this.element.removeAttribute('data-filter-active');
+      }
+    }
+  }
+
+  /**
+   * フィルタアクティブ状態を取得
+   * @returns {boolean}
+   */
+  isFilterActive() {
+    return this._isFilterActive;
   }
 
   /**

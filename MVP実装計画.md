@@ -83,10 +83,16 @@
 ---
 
 ## 7. フィルタリング
-- [ ] フォルダ選択状態の管理
-- [ ] FolderLM フィルタをノート一覧に適用
-- [ ] NotebookLM 標準フィルタと AND 条件で併用
-- [ ] 「すべて」で FolderLM 側のみ解除
+- [x] フォルダ選択状態の管理
+- [x] FolderLM フィルタをノート一覧に適用
+- [x] NotebookLM 標準フィルタと AND 条件で併用
+- [x] 「すべて」で FolderLM 側のみ解除
+
+**実装成果物:**
+- `src/content/core/filterManager.js` - フィルタ状態管理とフィルタ適用ロジック
+- `src/content/index.js` - filterManagerとの統合
+- `src/content/ui/folderButton.js` - フィルタアクティブ状態表示
+- `src/content/content.css` - フィルタアクティブ状態のスタイル
 
 ---
 
