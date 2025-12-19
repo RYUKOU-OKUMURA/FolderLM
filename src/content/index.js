@@ -15,6 +15,8 @@ import { noteDetector, DetectionStatus } from './core/noteDetector.js';
 import { safetyManager, SafetyState, ErrorType } from './core/safetyManager.js';
 import { folderButton } from './ui/folderButton.js';
 import { folderDropdown } from './ui/folderDropdown.js';
+import { noteAssignButton } from './ui/noteAssignButton.js';
+import { folderSelectPopup } from './ui/folderSelectPopup.js';
 
 /**
  * FolderLM アプリケーションクラス
@@ -34,6 +36,8 @@ class FolderLM {
     // UI コンポーネントへの参照
     this.folderButton = folderButton;
     this.folderDropdown = folderDropdown;
+    this.noteAssignButton = noteAssignButton;
+    this.folderSelectPopup = folderSelectPopup;
 
     // 現在選択中のフォルダ（フィルタ用）
     this._selectedFolderId = null;
@@ -237,6 +241,12 @@ class FolderLM {
     // フォルダドロップダウンのイベントを設定
     this._setupFolderDropdown();
 
+    // ノート割り当てボタンのイベントを設定
+    this._setupNoteAssignButton();
+
+    // フォルダ選択ポップアップのイベントを設定
+    this._setupFolderSelectPopup();
+
     // 既存のノートカードに割り当てボタンを追加
     this.processNoteCards();
 
@@ -281,6 +291,51 @@ class FolderLM {
     // ドロップダウンが閉じた時の処理
     this.folderDropdown.onClose(() => {
       this.folderButton.setOpen(false);
+    });
+  }
+
+  /**
+   * ノート割り当てボタンのイベントを設定
+   * @private
+   */
+  _setupNoteAssignButton() {
+    // ボタンクリック時にフォルダ選択ポップアップを表示
+    this.noteAssignButton.onClick((noteId, buttonElement) => {
+      // フォルダドロップダウンが開いていたら閉じる
+      if (this.folderDropdown.isOpen()) {
+        this.folderDropdown.close();
+      }
+      
+      this.folderSelectPopup.open(noteId, buttonElement);
+    });
+  }
+
+  /**
+   * フォルダ選択ポップアップのイベントを設定
+   * @private
+   */
+  _setupFolderSelectPopup() {
+    // フォルダ選択時の処理
+    this.folderSelectPopup.onSelect((noteId, folderId) => {
+      // 割り当てボタンの状態を更新
+      this.noteAssignButton.updateState(noteId);
+      
+      // フォルダバッジを更新
+      const card = this.noteDetector.getCardByNoteId(noteId);
+      if (card) {
+        this._updateFolderBadge(card, noteId);
+      }
+
+      // フィルタが適用されている場合、表示/非表示を更新
+      if (this._selectedFolderId !== null) {
+        this._applyFolderFilter(this._selectedFolderId);
+      }
+
+      // フィードバック通知
+      const folder = storageManager.getFolder(folderId);
+      if (folder) {
+        this.showInfo(`「${folder.name}」に割り当てました`, 2000);
+      }
     });
   }
 
@@ -401,15 +456,76 @@ class FolderLM {
    * @param {string} noteId - ノートID
    */
   applyFolderState(card, noteId) {
+    // 割り当てボタンを追加
+    this.noteAssignButton.addToCard(card, noteId);
+
+    // フォルダ割り当て状態を反映
     const folderId = storageManager.getNoteFolder(noteId);
     
     if (folderId) {
       const folder = storageManager.getFolder(folderId);
       if (folder) {
         card.setAttribute('data-folderlm-folder-id', folderId);
-        // TODO: フォルダバッジを表示
       }
     }
+
+    // フォルダバッジを更新
+    this._updateFolderBadge(card, noteId);
+  }
+
+  /**
+   * ノートカードのフォルダバッジを更新
+   * @param {Element} card - ノートカード要素
+   * @param {string} noteId - ノートID
+   * @private
+   */
+  _updateFolderBadge(card, noteId) {
+    // 既存のバッジを削除
+    const existingBadge = card.querySelector(`.${FOLDERLM_CLASSES.FOLDER_BADGE}`);
+    if (existingBadge) {
+      existingBadge.remove();
+    }
+
+    const folderId = storageManager.getNoteFolder(noteId);
+    
+    // 未割り当てまたは未分類の場合はバッジを表示しない
+    if (!folderId || folderId === storageManager.UNCATEGORIZED_ID) {
+      card.removeAttribute('data-folderlm-folder-id');
+      return;
+    }
+
+    const folder = storageManager.getFolder(folderId);
+    if (!folder) {
+      return;
+    }
+
+    // バッジを作成
+    const badge = document.createElement('div');
+    badge.className = FOLDERLM_CLASSES.FOLDER_BADGE;
+    badge.setAttribute('title', `フォルダ: ${folder.name}`);
+
+    const icon = document.createElement('span');
+    icon.className = 'folderlm-folder-badge-icon';
+    icon.textContent = '📁';
+    icon.setAttribute('aria-hidden', 'true');
+    badge.appendChild(icon);
+
+    const name = document.createElement('span');
+    name.className = 'folderlm-folder-badge-name';
+    name.textContent = folder.name;
+    badge.appendChild(name);
+
+    // バッジを挿入（カード内の適切な位置を探す）
+    // ノートカードの構造によって調整が必要な場合がある
+    const titleElement = card.querySelector('[id*="project-"][id*="-title"]');
+    if (titleElement && titleElement.parentElement) {
+      titleElement.parentElement.appendChild(badge);
+    } else {
+      // フォールバック: カードの先頭付近に追加
+      card.appendChild(badge);
+    }
+
+    card.setAttribute('data-folderlm-folder-id', folderId);
   }
 
   /**
@@ -547,6 +663,8 @@ class FolderLM {
     // UI コンポーネントをクリーンアップ
     this.folderButton.destroy();
     this.folderDropdown.destroy();
+    this.noteAssignButton.destroy();
+    this.folderSelectPopup.destroy();
 
     // noteDetector と safetyManager をクリーンアップ
     this.noteDetector.destroy();
@@ -558,6 +676,8 @@ class FolderLM {
     document.querySelectorAll(`.${FOLDERLM_CLASSES.FOLDER_BUTTON}`).forEach(el => el.remove());
     document.querySelectorAll(`.${FOLDERLM_CLASSES.FOLDER_DROPDOWN}`).forEach(el => el.remove());
     document.querySelectorAll(`.${FOLDERLM_CLASSES.ASSIGN_BUTTON}`).forEach(el => el.remove());
+    document.querySelectorAll(`.${FOLDERLM_CLASSES.SELECT_POPUP}`).forEach(el => el.remove());
+    document.querySelectorAll(`.${FOLDERLM_CLASSES.FOLDER_BADGE}`).forEach(el => el.remove());
 
     this.initialized = false;
     console.log('[FolderLM] Destroyed');

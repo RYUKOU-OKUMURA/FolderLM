@@ -69,10 +69,16 @@
 ---
 
 ## 6. ノート割り当て UI
-- [ ] ノートカードに📁割り当てボタンを表示（ホバー時）
-- [ ] フォルダ選択ポップアップの実装
-- [ ] 選択結果を `noteAssignments` に反映
-- [ ] 割り当て済み状態をカード上に表示
+- [x] ノートカードに📁割り当てボタンを表示（ホバー時）
+- [x] フォルダ選択ポップアップの実装
+- [x] 選択結果を `noteAssignments` に反映
+- [x] 割り当て済み状態をカード上に表示
+
+**実装成果物:**
+- `src/content/ui/noteAssignButton.js` - 割り当てボタンコンポーネント
+- `src/content/ui/folderSelectPopup.js` - フォルダ選択ポップアップコンポーネント
+- `src/content/index.js` - UI統合と初期化フロー更新
+- `src/content/content.css` - スタイル更新
 
 ---
 
