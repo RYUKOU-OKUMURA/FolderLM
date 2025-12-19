@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "FolderLM",
+  "version": "1.0.0",
+  "description": "NotebookLM のノート一覧に仮想フォルダ整理と絞り込みを追加する拡張機能",
+
+  "permissions": [
+    "storage"
+  ],
+
+  "host_permissions": [
+    "https://notebooklm.google.com/*"
+  ],
+
+  "content_scripts": [
+    {
+      "matches": ["https://notebooklm.google.com/*"],
+      "js": ["src/content/index.js"],
+      "css": ["src/content/content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+
+  "icons": {
+    "16": "assets/icons/icon16.png",
+    "48": "assets/icons/icon48.png",
+    "128": "assets/icons/icon128.png"
+  },
+
+  "action": {
+    "default_icon": {
+      "16": "assets/icons/icon16.png",
+      "48": "assets/icons/icon48.png"
+    },
+    "default_title": "FolderLM"
+  }
+}

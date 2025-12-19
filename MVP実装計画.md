@@ -23,11 +23,11 @@
 ---
 
 ## 2. プロジェクト初期構成
-- [ ] `manifest.json` を作成（MV3、storage 権限、host 権限）
-- [ ] `src/content/index.js` と `content.css` を用意
-- [ ] `src/storage/storageManager.js` の骨組みを作成
-- [ ] `src/content/utils/` に `selectors.js`, `idParser.js`, `debounce.js` を作成
-- [ ] 拡張機能を Chrome に読み込める状態にする
+- [x] `manifest.json` を作成（MV3、storage 権限、host 権限）
+- [x] `src/content/index.js` と `content.css` を用意
+- [x] `src/storage/storageManager.js` の骨組みを作成
+- [x] `src/content/utils/` に `selectors.js`, `idParser.js`, `debounce.js` を作成
+- [x] 拡張機能を Chrome に読み込める状態にする
 
 ---
 
