@@ -48,6 +48,20 @@ const LIMITS = {
   MAX_FOLDER_NAME_LENGTH: 30,
   MAX_FOLDERS: 200,
   MAX_NOTES: 1000,
+  /** chrome.storage.sync の容量上限（バイト） */
+  STORAGE_QUOTA_BYTES: 102400, // 100KB
+  /** 警告を出す容量閾値（80%） */
+  STORAGE_WARNING_THRESHOLD: 0.8,
+};
+
+/**
+ * エラータイプ
+ */
+const ERROR_TYPES = {
+  QUOTA_EXCEEDED: 'QUOTA_EXCEEDED',
+  LOAD_FAILED: 'LOAD_FAILED',
+  SAVE_FAILED: 'SAVE_FAILED',
+  VALIDATION_FAILED: 'VALIDATION_FAILED',
 };
 
 /**
@@ -62,6 +76,49 @@ class StorageManager {
 
     // 保存処理をデバウンス（300ms）
     this.debouncedSave = debounce(() => this._save(), 300);
+
+    // エラーリスナー
+    this._errorListeners = [];
+
+    // 容量警告が表示されたかどうか
+    this._quotaWarningShown = false;
+  }
+
+  /**
+   * エラーリスナーを追加
+   * @param {Function} listener - エラーハンドラ (error: { type, message, data }) => void
+   */
+  onError(listener) {
+    if (typeof listener === 'function') {
+      this._errorListeners.push(listener);
+    }
+  }
+
+  /**
+   * エラーリスナーを削除
+   * @param {Function} listener - 削除するリスナー
+   */
+  offError(listener) {
+    this._errorListeners = this._errorListeners.filter(l => l !== listener);
+  }
+
+  /**
+   * エラーを発火
+   * @param {string} type - エラータイプ
+   * @param {string} message - エラーメッセージ
+   * @param {Object} [data] - 追加データ
+   */
+  _emitError(type, message, data = {}) {
+    const error = { type, message, data, timestamp: Date.now() };
+    console.error(`[FolderLM Storage] ${type}:`, message, data);
+
+    for (const listener of this._errorListeners) {
+      try {
+        listener(error);
+      } catch (e) {
+        console.error('[FolderLM Storage] Error listener failed:', e);
+      }
+    }
   }
 
   /**
@@ -98,6 +155,13 @@ class StorageManager {
       console.error('[FolderLM Storage] Load failed:', error);
       // エラー時は安全なデフォルト値を使用
       this._resetToDefaults();
+
+      this._emitError(
+        ERROR_TYPES.LOAD_FAILED,
+        'データの読み込みに失敗しました。初期状態で開始します。',
+        { originalError: error }
+      );
+
       throw error;
     }
   }
@@ -108,6 +172,9 @@ class StorageManager {
    */
   async _save() {
     try {
+      // 保存前に容量チェック
+      this._checkStorageUsage();
+
       await this._setStorage({
         [STORAGE_KEYS.FOLDERS]: this.folders,
         [STORAGE_KEYS.NOTE_ASSIGNMENTS]: this.noteAssignments,
@@ -121,8 +188,14 @@ class StorageManager {
       console.error('[FolderLM Storage] Save failed:', error);
       
       // 容量超過エラーの場合
-      if (error.message?.includes('QUOTA_BYTES')) {
+      if (error.message?.includes('QUOTA_BYTES') || error.message?.includes('quota')) {
         this._handleQuotaExceeded();
+      } else {
+        this._emitError(
+          ERROR_TYPES.SAVE_FAILED,
+          '保存に失敗しました: ' + error.message,
+          { originalError: error }
+        );
       }
       
       throw error;
@@ -546,8 +619,165 @@ class StorageManager {
    * 容量超過時の処理
    */
   _handleQuotaExceeded() {
-    console.error('[FolderLM Storage] Storage quota exceeded');
-    // TODO: ユーザー通知とデータ削減の提案
+    const suggestions = this._getDataReductionSuggestions();
+
+    this._emitError(
+      ERROR_TYPES.QUOTA_EXCEEDED,
+      'ストレージ容量が上限に達しました。データを削減してください。',
+      {
+        suggestions,
+        currentUsage: this._estimateStorageUsage(),
+        limit: LIMITS.STORAGE_QUOTA_BYTES,
+      }
+    );
+  }
+
+  /**
+   * データ削減の提案を生成
+   * @returns {Array<{ action: string, description: string, savings: number }>}
+   */
+  _getDataReductionSuggestions() {
+    const suggestions = [];
+
+    // 空のフォルダを削除する提案
+    const emptyFolders = this.folders.filter(f => {
+      if (f.isDefault) return false;
+      const noteCount = Object.values(this.noteAssignments)
+        .filter(folderId => folderId === f.id).length;
+      return noteCount === 0;
+    });
+
+    if (emptyFolders.length > 0) {
+      suggestions.push({
+        action: 'DELETE_EMPTY_FOLDERS',
+        description: `空のフォルダが ${emptyFolders.length} 個あります。削除を検討してください。`,
+        savings: emptyFolders.length * 50, // 推定削減バイト数
+        folderIds: emptyFolders.map(f => f.id),
+      });
+    }
+
+    // 古い割り当て（存在しないノートへの参照）を削除する提案
+    // ※ 実際のノート存在確認は Content Script 側で行う必要がある
+    const orphanedAssignments = Object.keys(this.noteAssignments).length;
+    if (orphanedAssignments > 100) {
+      suggestions.push({
+        action: 'CLEANUP_ORPHANED',
+        description: `ノート割り当てが ${orphanedAssignments} 件あります。不要な割り当てを整理してください。`,
+        savings: Math.floor(orphanedAssignments * 0.1) * 50,
+      });
+    }
+
+    return suggestions;
+  }
+
+  /**
+   * 現在のストレージ使用量を推定（バイト）
+   * @returns {number}
+   */
+  _estimateStorageUsage() {
+    const data = {
+      [STORAGE_KEYS.FOLDERS]: this.folders,
+      [STORAGE_KEYS.NOTE_ASSIGNMENTS]: this.noteAssignments,
+      [STORAGE_KEYS.SETTINGS]: this.settings,
+      [STORAGE_KEYS.VERSION]: CURRENT_VERSION,
+    };
+
+    // JSON文字列の長さ×2（UTF-16）で概算
+    return JSON.stringify(data).length * 2;
+  }
+
+  /**
+   * ストレージ使用状況を取得
+   * @returns {{ used: number, total: number, percentage: number }}
+   */
+  getStorageUsage() {
+    const used = this._estimateStorageUsage();
+    const total = LIMITS.STORAGE_QUOTA_BYTES;
+    const percentage = Math.round((used / total) * 100);
+
+    return { used, total, percentage };
+  }
+
+  /**
+   * ストレージ使用量をチェックし、警告を出す
+   */
+  _checkStorageUsage() {
+    const { used, total, percentage } = this.getStorageUsage();
+    const threshold = LIMITS.STORAGE_WARNING_THRESHOLD * 100;
+
+    if (percentage >= threshold && !this._quotaWarningShown) {
+      this._quotaWarningShown = true;
+      console.warn(`[FolderLM Storage] Storage usage is at ${percentage}% (${used}/${total} bytes)`);
+
+      this._emitError(
+        ERROR_TYPES.QUOTA_EXCEEDED,
+        `ストレージ使用量が ${percentage}% に達しています。データを整理してください。`,
+        {
+          used,
+          total,
+          percentage,
+          isWarning: true,
+          suggestions: this._getDataReductionSuggestions(),
+        }
+      );
+    } else if (percentage < threshold) {
+      this._quotaWarningShown = false;
+    }
+  }
+
+  /**
+   * 空のフォルダを一括削除
+   * @returns {{ success: boolean, deletedCount: number }}
+   */
+  deleteEmptyFolders() {
+    const emptyFolders = this.folders.filter(f => {
+      if (f.isDefault) return false;
+      const noteCount = Object.values(this.noteAssignments)
+        .filter(folderId => folderId === f.id).length;
+      return noteCount === 0;
+    });
+
+    if (emptyFolders.length === 0) {
+      return { success: true, deletedCount: 0 };
+    }
+
+    const emptyFolderIds = new Set(emptyFolders.map(f => f.id));
+    this.folders = this.folders.filter(f => !emptyFolderIds.has(f.id));
+    this.save();
+
+    console.log(`[FolderLM Storage] Deleted ${emptyFolders.length} empty folders`);
+    return { success: true, deletedCount: emptyFolders.length };
+  }
+
+  /**
+   * 孤立したノート割り当てを削除
+   * @param {string[]} validNoteIds - 有効なノートIDの配列
+   * @returns {{ success: boolean, deletedCount: number }}
+   */
+  cleanupOrphanedAssignments(validNoteIds) {
+    if (!Array.isArray(validNoteIds)) {
+      return { success: false, deletedCount: 0 };
+    }
+
+    const validIds = new Set(validNoteIds);
+    const originalCount = Object.keys(this.noteAssignments).length;
+
+    const cleanedAssignments = {};
+    for (const [noteId, folderId] of Object.entries(this.noteAssignments)) {
+      if (validIds.has(noteId)) {
+        cleanedAssignments[noteId] = folderId;
+      }
+    }
+
+    const deletedCount = originalCount - Object.keys(cleanedAssignments).length;
+
+    if (deletedCount > 0) {
+      this.noteAssignments = cleanedAssignments;
+      this.save();
+      console.log(`[FolderLM Storage] Cleaned up ${deletedCount} orphaned assignments`);
+    }
+
+    return { success: true, deletedCount };
   }
 
   /**
@@ -574,6 +804,13 @@ class StorageManager {
    */
   get LIMITS() {
     return { ...LIMITS };
+  }
+
+  /**
+   * エラータイプを取得
+   */
+  get ERROR_TYPES() {
+    return { ...ERROR_TYPES };
   }
 }
 

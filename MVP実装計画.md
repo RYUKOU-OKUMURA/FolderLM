@@ -32,11 +32,11 @@
 ---
 
 ## 3. データモデルとストレージ
-- [ ] データ初期値（folders / noteAssignments）を定義
-- [ ] 「未分類」固定フォルダの初期化ロジック
-- [ ] `storageManager.load()` の実装（バリデーション含む）
-- [ ] `storageManager.save()` の実装（デバウンス）
-- [ ] ストレージ容量超過時のエラーハンドリング
+- [x] データ初期値（folders / noteAssignments）を定義
+- [x] 「未分類」固定フォルダの初期化ロジック
+- [x] `storageManager.load()` の実装（バリデーション含む）
+- [x] `storageManager.save()` の実装（デバウンス）
+- [x] ストレージ容量超過時のエラーハンドリング
 
 ---
 
