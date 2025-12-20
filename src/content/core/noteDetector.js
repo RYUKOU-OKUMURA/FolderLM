@@ -129,7 +129,8 @@ class NoteDetector {
       const noteId = this._extractNoteId(card);
       
       if (noteId) {
-        this._registerNote(noteId, card);
+        const resolvedCard = this._resolveCardElement(card);
+        this._registerNote(noteId, resolvedCard);
         identified++;
       } else {
         newFailedCards.add(card);
@@ -222,6 +223,21 @@ class NoteDetector {
   }
 
   /**
+   * ノートカード要素を正規化（クリック領域を含む親要素を優先）
+   * @param {Element} card - ノートカード要素
+   * @returns {Element}
+   * @private
+   */
+  _resolveCardElement(card) {
+    if (!card || !(card instanceof Element)) {
+      return card;
+    }
+
+    const listItem = card.closest('[role="listitem"]');
+    return listItem || card;
+  }
+
+  /**
    * ノートをマッピングに登録
    * @param {string} noteId - ノートID
    * @param {Element} card - ノートカード要素
@@ -230,10 +246,15 @@ class NoteDetector {
     // 重複チェック
     if (this.noteMap.has(noteId)) {
       const existingCard = this.noteMap.get(noteId);
-      if (existingCard !== card) {
-        console.warn(`[FolderLM NoteDetector] Duplicate note ID: ${noteId}`);
+      if (existingCard === card) {
+        return;
       }
-      return;
+
+      if (existingCard) {
+        this.elementMap.delete(existingCard);
+        existingCard.removeAttribute(DATA_ATTRIBUTES.NOTE_ID);
+        existingCard.removeAttribute(DATA_ATTRIBUTES.INITIALIZED);
+      }
     }
 
     // マッピングに追加
@@ -365,17 +386,18 @@ class NoteDetector {
     for (const card of currentCards) {
       const noteId = this._extractNoteId(card);
       if (noteId) {
+        const resolvedCard = this._resolveCardElement(card);
         currentIds.add(noteId);
         
         // 新しく追加されたノート
         if (!previousIds.has(noteId)) {
-          this._registerNote(noteId, card);
+          this._registerNote(noteId, resolvedCard);
           added.push(noteId);
         } else {
           // 既存ノートのカード参照を更新
           const existingCard = this.noteMap.get(noteId);
-          if (existingCard !== card) {
-            this._registerNote(noteId, card);
+          if (existingCard !== resolvedCard) {
+            this._registerNote(noteId, resolvedCard);
           }
         }
       }
@@ -414,7 +436,8 @@ class NoteDetector {
     const noteId = this._extractNoteId(card);
     
     if (noteId) {
-      this._registerNote(noteId, card);
+      const resolvedCard = this._resolveCardElement(card);
+      this._registerNote(noteId, resolvedCard);
       return { success: true, noteId };
     } else {
       this.failedCards.add(card);

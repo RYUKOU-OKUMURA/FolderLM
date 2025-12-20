@@ -82,8 +82,31 @@ class FolderButton {
     button.addEventListener('click', this._handleClick.bind(this));
     button.addEventListener('keydown', this._handleKeydown.bind(this));
 
-    // DOM に挿入
-    actionBar.appendChild(button);
+    // DOM に挿入（共有タブの右隣に挿入を試みる）
+    // 「共有」を含むタブ要素を探す（mat-button-toggle要素）
+    let sharedToggle = null;
+    const allToggles = document.querySelectorAll('.mat-button-toggle');
+    for (const toggle of allToggles) {
+      if (toggle.textContent.includes('共有')) {
+        sharedToggle = toggle;
+        break;
+      }
+    }
+
+    if (sharedToggle && sharedToggle.parentElement) {
+      // 共有タブの次の兄弟要素として挿入
+      sharedToggle.parentElement.insertBefore(button, sharedToggle.nextSibling);
+    } else {
+      // フォールバック: フィルタグループの後に挿入
+      const filterGroup = findFirstMatch(UI_INJECTION_SELECTORS.FILTER_GROUP);
+      if (filterGroup && filterGroup.parentElement) {
+        filterGroup.parentElement.insertBefore(button, filterGroup.nextSibling);
+      } else {
+        // 最終フォールバック: アクションバーの先頭に挿入
+        actionBar.insertBefore(button, actionBar.firstChild);
+      }
+    }
+
     this.element = button;
 
     console.log('[FolderLM] Folder button created');

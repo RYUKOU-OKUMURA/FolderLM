@@ -479,8 +479,12 @@ class FolderDropdown {
       errorDiv.style.display = 'none';
     });
 
-    // ESC でキャンセル
+    // ESC でキャンセル（IME変換中は無視）
     input.addEventListener('keydown', (e) => {
+      // IME変換中は無視
+      if (e.isComposing || e.keyCode === 229) {
+        return;
+      }
       if (e.key === 'Escape') {
         e.preventDefault();
         e.stopPropagation();
@@ -646,6 +650,15 @@ class FolderDropdown {
       return;
     }
 
+    // 入力モード（CREATING状態）では、入力フィールドがアクティブな場合は閉じない
+    if (this._state === DropdownState.CREATING) {
+      const activeElement = document.activeElement;
+      const input = this.element.querySelector('.folderlm-folder-create-input');
+      if (input && (activeElement === input || input.contains(activeElement))) {
+        return;
+      }
+    }
+
     this.close();
   }
 
@@ -655,6 +668,13 @@ class FolderDropdown {
    * @private
    */
   _handleKeydown(event) {
+    if (this._state === DropdownState.CREATING) {
+      const target = event.target;
+      if (target instanceof Element && target.closest('.folderlm-folder-create')) {
+        return;
+      }
+    }
+
     const items = this.element?.querySelectorAll('.folderlm-folder-item');
     if (!items || items.length === 0) {
       return;
@@ -704,6 +724,11 @@ class FolderDropdown {
    * @private
    */
   _handleEscape(event) {
+    // IME変換中は無視
+    if (event.isComposing || event.keyCode === 229) {
+      return;
+    }
+
     if (event.key === 'Escape') {
       event.preventDefault();
       event.stopPropagation();
