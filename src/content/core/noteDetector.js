@@ -11,7 +11,8 @@ import {
   NOTE_SELECTORS, 
   DATA_ATTRIBUTES,
   FOLDERLM_CLASSES,
-  findAllMatches 
+  findAllMatches,
+  findNoteListContainer
 } from '../utils/selectors.js';
 import { 
   extractNoteIdFromCard, 
@@ -82,6 +83,12 @@ class NoteDetector {
      * バッチ処理用のデバウンス関数
      */
     this._debouncedScan = debounce(() => this._performScan(), 100);
+
+    /**
+     * ノート一覧コンテナのキャッシュ（スキャンごとに更新）
+     * @type {Element|null}
+     */
+    this._listContainerCache = null;
   }
 
   // ==========================================================================
@@ -117,6 +124,9 @@ class NoteDetector {
   _performScan() {
     // 既存のマッピングをクリア（失敗カードのみ保持）
     this.noteMap.clear();
+
+    // ノート一覧コンテナをキャッシュ
+    this._listContainerCache = findNoteListContainer();
     
     // ノートカードを取得
     const cards = this._findNoteCards();
@@ -234,7 +244,24 @@ class NoteDetector {
     }
 
     const listItem = card.closest('[role="listitem"]');
-    return listItem || card;
+    if (listItem) {
+      return listItem;
+    }
+
+    const listContainer = this._listContainerCache || findNoteListContainer();
+    if (listContainer) {
+      let current = card;
+      let depth = 0;
+      while (current && current.parentElement && current.parentElement !== listContainer && depth < 10) {
+        current = current.parentElement;
+        depth++;
+      }
+      if (current && current.parentElement === listContainer) {
+        return current;
+      }
+    }
+
+    return card;
   }
 
   /**

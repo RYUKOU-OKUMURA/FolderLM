@@ -7,7 +7,7 @@
  * @module content/core/filterManager
  */
 
-import { FOLDERLM_CLASSES, FILTER_SELECTORS, VIEW_MODES, DATA_ATTRIBUTES, NOTE_SELECTORS } from '../utils/selectors.js';
+import { FOLDERLM_CLASSES, FILTER_SELECTORS, VIEW_MODES, DATA_ATTRIBUTES, NOTE_SELECTORS, findNoteListContainer } from '../utils/selectors.js';
 import { storageManager } from '../../storage/storageManager.js';
 import { noteDetector } from './noteDetector.js';
 import { batchWithRAF } from '../utils/debounce.js';
@@ -85,6 +85,15 @@ class FilterManager {
      * @type {number}
      */
     this._groupModeFailureThreshold = 3;
+  }
+
+  /**
+   * ノート一覧コンテナを取得（フォールバック付き）
+   * @returns {Element|null}
+   * @private
+   */
+  _getListContainer() {
+    return findNoteListContainer();
   }
 
   // ==========================================================================
@@ -297,7 +306,7 @@ class FilterManager {
       return false;
     }
 
-    const container = document.querySelector(NOTE_SELECTORS.LIST_CONTAINER);
+    const container = this._getListContainer();
     if (!container) {
       return false;
     }
@@ -433,7 +442,7 @@ class FilterManager {
       this._groupByFolder();
 
       // グループヘッダーが正しく挿入されたか確認
-      const container = document.querySelector(NOTE_SELECTORS.LIST_CONTAINER);
+      const container = this._getListContainer();
       if (container && !this.isFilterActive()) {
         const groupHeaders = container.querySelectorAll(`.${FOLDERLM_CLASSES.GROUP_HEADER}`);
         const groupedCards = container.querySelectorAll(`.${FOLDERLM_CLASSES.GROUPED}`);
@@ -482,7 +491,7 @@ class FilterManager {
    * @private
    */
   _initializeOriginalIndices() {
-    const container = document.querySelector(NOTE_SELECTORS.LIST_CONTAINER);
+    const container = this._getListContainer();
     if (!container) {
       console.warn('[FolderLM FilterManager] List container not found');
       return;
@@ -546,7 +555,7 @@ class FilterManager {
    * @private
    */
   _sortByFolder() {
-    const container = document.querySelector(NOTE_SELECTORS.LIST_CONTAINER);
+    const container = this._getListContainer();
     if (!container) {
       console.warn('[FolderLM FilterManager] List container not found for sorting');
       return;
@@ -717,7 +726,7 @@ class FilterManager {
    * @private
    */
   _clearSortState() {
-    const container = document.querySelector(NOTE_SELECTORS.LIST_CONTAINER);
+    const container = this._getListContainer();
     if (!container) return;
 
     // ソート済みカードを取得
@@ -764,7 +773,7 @@ class FilterManager {
    * @private
    */
   _groupByFolder() {
-    const container = document.querySelector(NOTE_SELECTORS.LIST_CONTAINER);
+    const container = this._getListContainer();
     if (!container) {
       console.warn('[FolderLM FilterManager] List container not found for grouping');
       return;

@@ -322,6 +322,40 @@ export function findFirstMatch(...selectors) {
 }
 
 /**
+ * ノート一覧コンテナを取得（フォールバック付き）
+ * @returns {Element|null}
+ */
+export function findNoteListContainer() {
+  const direct = findFirstMatch(NOTE_SELECTORS.LIST_CONTAINER);
+  if (direct) {
+    return direct;
+  }
+
+  const cards = findAllMatches(NOTE_SELECTORS.CARD, NOTE_SELECTORS.CARD_FALLBACK);
+  if (cards.length === 0) {
+    return null;
+  }
+
+  const minimumCount = Math.min(cards.length, 2);
+  const maxDepth = 10;
+  let current = cards[0].parentElement;
+  let depth = 0;
+
+  while (current && current !== document.body && depth < maxDepth) {
+    const count =
+      current.querySelectorAll(NOTE_SELECTORS.CARD).length +
+      current.querySelectorAll(NOTE_SELECTORS.CARD_FALLBACK).length;
+    if (count >= minimumCount) {
+      return current;
+    }
+    current = current.parentElement;
+    depth++;
+  }
+
+  return null;
+}
+
+/**
  * 複数のセレクタからすべての一致要素を返す
  * @param {...string} selectors - 試行するセレクタのリスト
  * @returns {Element[]} 見つかったすべての要素

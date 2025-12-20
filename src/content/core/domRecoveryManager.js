@@ -13,7 +13,8 @@ import {
   FOLDERLM_CLASSES,
   VIEW_MODES,
   DATA_ATTRIBUTES,
-  FILTER_SELECTORS
+  FILTER_SELECTORS,
+  findNoteListContainer
 } from '../utils/selectors.js';
 import { debounce } from '../utils/debounce.js';
 
@@ -349,7 +350,7 @@ class DOMRecoveryManager {
     );
 
     // ノートリストコンテナも監視（DOM 再構築を検知）
-    const listContainer = document.querySelector(NOTE_SELECTORS.LIST_CONTAINER);
+    const listContainer = findNoteListContainer();
 
     if (!sortContainer && !listContainer) {
       console.log('[FolderLM DOMRecoveryManager] Sort container and list container not found, using body fallback');
