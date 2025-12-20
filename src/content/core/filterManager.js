@@ -296,8 +296,7 @@ class FilterManager {
       case VIEW_MODES.GROUP:
         // group モード: フォルダ順に並び替え + グループヘッダー
         // 「すべて」選択時のみ有効
-        // Phase 3 で実装予定
-        console.log('[FolderLM FilterManager] group mode - will be implemented in Phase 3');
+        this._groupByFolder();
         break;
 
       default:
@@ -310,21 +309,12 @@ class FilterManager {
    * @private
    */
   _clearViewModeState() {
+    // グループ状態をクリア（グループヘッダー削除 + グループ化クラス削除）
+    // _clearSortState より先に実行（DOM 順序復元前にヘッダーを削除）
+    this._clearGroupHeaders();
+
     // ソート状態をクリア（CSS order リセット + DOM 順序復元）
     this._clearSortState();
-
-    // グループ状態をクリア（グループヘッダー削除）
-    const container = document.querySelector(NOTE_SELECTORS.LIST_CONTAINER);
-    if (container) {
-      const groupedCards = container.querySelectorAll(`.${FOLDERLM_CLASSES.GROUPED}`);
-      groupedCards.forEach(card => {
-        card.classList.remove(FOLDERLM_CLASSES.GROUPED);
-      });
-    }
-
-    // グループヘッダーを削除
-    const headers = document.querySelectorAll(`.${FOLDERLM_CLASSES.GROUP_HEADER}`);
-    headers.forEach(header => header.remove());
 
     console.log('[FolderLM FilterManager] viewMode state cleared');
   }
@@ -609,6 +599,200 @@ class FilterManager {
     }
 
     console.log('[FolderLM FilterManager] Sort state cleared');
+  }
+
+  // ==========================================================================
+  // Phase 3: グループモード実装
+  // ==========================================================================
+
+  /**
+   * フォルダ順でノートを並べ替え、グループヘッダーを挿入
+   * 「すべて」選択時のみグループヘッダーを表示
+   * @private
+   */
+  _groupByFolder() {
+    const container = document.querySelector(NOTE_SELECTORS.LIST_CONTAINER);
+    if (!container) {
+      console.warn('[FolderLM FilterManager] List container not found for grouping');
+      return;
+    }
+
+    // 既存のグループヘッダーを削除
+    this._clearGroupHeaders();
+
+    // NotebookLM フィルタ通過後の可視ノートのみを対象にする
+    const visibleNotes = this._getVisibleNotes();
+    if (visibleNotes.length === 0) {
+      console.log('[FolderLM FilterManager] No visible notes to group');
+      return;
+    }
+
+    // フォルダ順 + 元インデックスで安定並べ替えを計算
+    const sortedNotes = this._calculateSortOrder(visibleNotes);
+
+    // フォルダIDでグループ化
+    const groupedNotes = this._groupNotesByFolder(sortedNotes);
+
+    // DOM 並べ替え + グループヘッダー挿入
+    // グループモードは常に DOM 並べ替えを使用（ヘッダー挿入のため）
+    this._applyGroupedDomReorder(container, groupedNotes);
+
+    console.log(`[FolderLM FilterManager] Group applied (${sortedNotes.length} notes, ${groupedNotes.length} groups)`);
+  }
+
+  /**
+   * ノートをフォルダIDでグループ化
+   * @param {Array<{noteId: string, card: Element, folderId: string}>} sortedNotes - ソート済みノートリスト
+   * @returns {Array<{folderId: string, folder: Object|null, notes: Array}>}
+   * @private
+   */
+  _groupNotesByFolder(sortedNotes) {
+    const groupMap = new Map();
+    const folders = storageManager.getFolders();
+    const folderMap = new Map(folders.map(f => [f.id, f]));
+
+    // ソート済みノートをグループに分類
+    for (const note of sortedNotes) {
+      const { folderId } = note;
+      
+      if (!groupMap.has(folderId)) {
+        groupMap.set(folderId, {
+          folderId,
+          folder: folderMap.get(folderId) || null,
+          notes: [],
+        });
+      }
+      
+      groupMap.get(folderId).notes.push(note);
+    }
+
+    // フォルダ順序で結果を返す
+    const orderedGroups = [];
+    for (const folder of folders) {
+      if (groupMap.has(folder.id)) {
+        orderedGroups.push(groupMap.get(folder.id));
+      }
+    }
+
+    // フォルダ一覧にない（削除された）フォルダに属するノートも追加
+    for (const [folderId, group] of groupMap) {
+      if (!folderMap.has(folderId)) {
+        orderedGroups.push(group);
+      }
+    }
+
+    return orderedGroups;
+  }
+
+  /**
+   * グループ化された DOM 並べ替えを適用
+   * グループヘッダーを挿入しながらノートを並べ替え
+   * @param {Element} container - リストコンテナ
+   * @param {Array<{folderId: string, folder: Object|null, notes: Array}>} groupedNotes - グループ化されたノートリスト
+   * @private
+   */
+  _applyGroupedDomReorder(container, groupedNotes) {
+    // 「すべて」選択時のみグループヘッダーを表示
+    const showHeaders = !this.isFilterActive();
+
+    const fragment = document.createDocumentFragment();
+    let orderIndex = 1;
+
+    for (const group of groupedNotes) {
+      const { folderId, folder, notes } = group;
+
+      // グループヘッダーを挿入（「すべて」選択時のみ）
+      if (showHeaders && notes.length > 0) {
+        const header = this._createGroupHeader(folderId, folder, notes.length);
+        fragment.appendChild(header);
+      }
+
+      // ノートを追加
+      for (const { card } of notes) {
+        card.classList.add(FOLDERLM_CLASSES.SORTED);
+        card.classList.add(FOLDERLM_CLASSES.GROUPED);
+        card.setAttribute(DATA_ATTRIBUTES.ORDER, String(orderIndex));
+        fragment.appendChild(card);
+        orderIndex++;
+      }
+    }
+
+    // 一括で DOM に挿入（リフローを最小化）
+    container.appendChild(fragment);
+  }
+
+  /**
+   * グループヘッダー要素を生成
+   * リストセマンティクスを壊さず、非操作・非フォーカスにする
+   * @param {string} folderId - フォルダID
+   * @param {Object|null} folder - フォルダオブジェクト
+   * @param {number} noteCount - グループ内のノート数
+   * @returns {HTMLElement}
+   * @private
+   */
+  _createGroupHeader(folderId, folder, noteCount) {
+    // リストセマンティクスを壊さないように div ではなく span ベースの要素を使用
+    // role="presentation" で支援技術に対してセマンティック上の意味を持たないことを示す
+    const header = document.createElement('div');
+    header.className = FOLDERLM_CLASSES.GROUP_HEADER;
+    header.setAttribute(DATA_ATTRIBUTES.GROUP_FOLDER_ID, folderId);
+    
+    // アクセシビリティ属性：非操作・非フォーカス
+    header.setAttribute('role', 'presentation');
+    header.setAttribute('aria-hidden', 'true');
+    header.setAttribute('tabindex', '-1');
+    header.setAttribute('inert', '');
+
+    // フォルダ名を取得（削除済みフォルダの場合はフォールバック）
+    let folderName = '不明なフォルダ';
+    let folderIcon = '📁';
+
+    if (folder) {
+      folderName = folder.name;
+      // 「未分類」フォルダの場合は特別なアイコン
+      if (folder.isDefault) {
+        folderIcon = '📄';
+      }
+    } else if (folderId === storageManager.UNCATEGORIZED_ID) {
+      folderName = '未分類';
+      folderIcon = '📄';
+    }
+
+    // ヘッダーの内容を構築
+    header.innerHTML = `
+      <span class="${FOLDERLM_CLASSES.GROUP_HEADER_ICON}">${folderIcon}</span>
+      <span class="${FOLDERLM_CLASSES.GROUP_HEADER_LABEL}">${this._escapeHtml(folderName)}</span>
+      <span class="folderlm-group-header-count">(${noteCount})</span>
+    `;
+
+    return header;
+  }
+
+  /**
+   * HTML エスケープ
+   * @param {string} str - エスケープする文字列
+   * @returns {string}
+   * @private
+   */
+  _escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  /**
+   * グループヘッダーをすべて削除
+   * @private
+   */
+  _clearGroupHeaders() {
+    const headers = document.querySelectorAll(`.${FOLDERLM_CLASSES.GROUP_HEADER}`);
+    headers.forEach(header => header.remove());
+
+    // グループ化済みクラスを削除
+    const groupedCards = document.querySelectorAll(`.${FOLDERLM_CLASSES.GROUPED}`);
+    groupedCards.forEach(card => {
+      card.classList.remove(FOLDERLM_CLASSES.GROUPED);
+    });
   }
 
   // ==========================================================================

@@ -601,3 +601,115 @@
     padding: 12px 16px;
   }
 }
+
+/* ==========================================================================
+   Phase 3: グループヘッダー
+   ========================================================================== */
+
+/**
+ * グループヘッダー
+ * フォルダグループの先頭に挿入される区切り要素
+ * リストセマンティクスを壊さず、非操作・非フォーカス
+ */
+.folderlm-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 16px 8px;
+  margin-top: 16px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #5f6368;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid #e8eaed;
+  background-color: transparent;
+  box-sizing: border-box;
+  
+  /* 非操作・非フォーカス */
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* 最初のグループヘッダーはマージントップなし */
+.folderlm-group-header:first-child {
+  margin-top: 0;
+}
+
+/* グループヘッダーアイコン */
+.folderlm-group-header-icon {
+  font-size: 14px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+/* グループヘッダーラベル */
+.folderlm-group-header-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* グループヘッダーノート数 */
+.folderlm-group-header-count {
+  font-size: 11px;
+  font-weight: 400;
+  color: #80868b;
+  flex-shrink: 0;
+}
+
+/* ダークモード対応 */
+@media (prefers-color-scheme: dark) {
+  .folderlm-group-header {
+    color: #9aa0a6;
+    border-bottom-color: #3c4043;
+  }
+
+  .folderlm-group-header-count {
+    color: #80868b;
+  }
+}
+
+/* ==========================================================================
+   ソート/グループモードのカード状態
+   ========================================================================== */
+
+/**
+ * ソート済みカード
+ * CSS order による並べ替えが適用されたカード
+ */
+.folderlm-sorted {
+  /* 必要に応じてトランジションを追加可能 */
+}
+
+/**
+ * グループ化済みカード
+ * グループモードで並べ替えられたカード
+ */
+.folderlm-grouped {
+  /* 必要に応じてスタイルを追加可能 */
+}
+
+/* ==========================================================================
+   グループヘッダー レスポンシブ対応
+   ========================================================================== */
+
+@media (max-width: 600px) {
+  .folderlm-group-header {
+    padding: 10px 12px 6px;
+    margin-top: 12px;
+    font-size: 11px;
+    gap: 6px;
+  }
+
+  .folderlm-group-header-icon {
+    font-size: 12px;
+  }
+
+  .folderlm-group-header-count {
+    font-size: 10px;
+  }
+}
