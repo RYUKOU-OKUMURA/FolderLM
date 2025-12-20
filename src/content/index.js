@@ -403,21 +403,46 @@ class FolderLM {
 
   /**
    * viewMode 復帰の統合を設定
+   * Phase 4: DOM 変化や仮想化後の並べ替え/ヘッダー再適用を担当
    * @private
    */
   _setupViewModeRecoveryIntegration() {
     // domRecoveryManager に viewMode の状態チェックコールバックを登録
     this.domRecoveryManager.setViewModeCheckCallback(() => {
+      return this.filterManager.checkViewModeRecoveryNeeded();
+    });
+
+    // domRecoveryManager に viewMode 再適用コールバックを登録
+    // DOM 変化（仮想化、ソート変更など）後に呼び出される
+    this.domRecoveryManager.setViewModeReapplyCallback(() => {
       const currentMode = this.filterManager.getViewMode();
       
-      // filter モードの場合は復帰不要
+      // filter モードの場合は再適用不要
       if (currentMode === VIEW_MODES.FILTER) {
-        return false;
+        return;
       }
 
-      // sort/group モードの場合、並び替え状態をチェック
-      // TODO: Phase 2/3 で sort/group 実装時により詳細なチェックを追加
-      return false;
+      console.log('[FolderLM] Reapplying viewMode after DOM change');
+      
+      // 元のインデックスを再初期化（DOM が再構築された可能性があるため）
+      this.filterManager.resetOriginalIndices();
+      
+      // ノートを再スキャン
+      this.noteDetector.scanNotes().then(() => {
+        // フィルタを再適用
+        this.filterManager.reapplyFilter();
+      });
+    });
+
+    // NotebookLM ソート変更時のコールバックを登録
+    this.domRecoveryManager.setSortChangeCallback(() => {
+      console.log('[FolderLM] NotebookLM sort changed, reapplying viewMode');
+      
+      // 元のインデックスを再初期化
+      this.filterManager.resetOriginalIndices();
+      
+      // フィルタを再適用
+      this.filterManager.reapplyFilter();
     });
   }
 

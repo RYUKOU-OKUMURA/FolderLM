@@ -73,6 +73,18 @@ class FilterManager {
      * viewMode 適用のバッチ処理
      */
     this._batchedApplyViewMode = batchWithRAF(() => this._performApplyViewMode());
+
+    /**
+     * グループモード失敗カウント（フォールバック判定用）
+     * @type {number}
+     */
+    this._groupModeFailureCount = 0;
+
+    /**
+     * グループモード失敗しきい値
+     * @type {number}
+     */
+    this._groupModeFailureThreshold = 3;
   }
 
   // ==========================================================================
@@ -275,6 +287,97 @@ class FilterManager {
   }
 
   /**
+   * viewMode の復帰が必要かどうかをチェック
+   * domRecoveryManager から呼び出される
+   * @returns {boolean} 復帰が必要な場合 true
+   */
+  checkViewModeRecoveryNeeded() {
+    // filter モードの場合は復帰不要
+    if (this._viewMode === VIEW_MODES.FILTER) {
+      return false;
+    }
+
+    const container = document.querySelector(NOTE_SELECTORS.LIST_CONTAINER);
+    if (!container) {
+      return false;
+    }
+
+    // sort モードのチェック
+    if (this._viewMode === VIEW_MODES.SORT) {
+      return this._checkSortRecoveryNeeded(container);
+    }
+
+    // group モードのチェック
+    if (this._viewMode === VIEW_MODES.GROUP) {
+      return this._checkGroupRecoveryNeeded(container);
+    }
+
+    return false;
+  }
+
+  /**
+   * sort モードの復帰が必要かチェック
+   * @param {Element} container
+   * @returns {boolean}
+   * @private
+   */
+  _checkSortRecoveryNeeded(container) {
+    // ソート済みカードの数を確認
+    const sortedCards = container.querySelectorAll(`.${FOLDERLM_CLASSES.SORTED}`);
+    const allCards = container.querySelectorAll(NOTE_SELECTORS.CARD);
+
+    // カードが存在するのにソート済みカードがない場合は復帰が必要
+    if (allCards.length > 0 && sortedCards.length === 0) {
+      console.log('[FolderLM FilterManager] Sort recovery needed: no sorted cards found');
+      return true;
+    }
+
+    // ソート済みカードの order 属性が消えている場合
+    const orderSupported = this._isOrderSupported(container);
+    if (orderSupported) {
+      const cardWithoutOrder = Array.from(sortedCards).find(
+        card => !card.style.order && !card.getAttribute(DATA_ATTRIBUTES.ORDER)
+      );
+      if (cardWithoutOrder) {
+        console.log('[FolderLM FilterManager] Sort recovery needed: order attribute missing');
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * group モードの復帰が必要かチェック
+   * @param {Element} container
+   * @returns {boolean}
+   * @private
+   */
+  _checkGroupRecoveryNeeded(container) {
+    // 「すべて」選択時のみグループヘッダーをチェック
+    if (!this.isFilterActive()) {
+      const groupHeaders = container.querySelectorAll(`.${FOLDERLM_CLASSES.GROUP_HEADER}`);
+      const groupedCards = container.querySelectorAll(`.${FOLDERLM_CLASSES.GROUPED}`);
+      const allCards = container.querySelectorAll(NOTE_SELECTORS.CARD);
+
+      // カードが存在するのにグループヘッダーがない場合は復帰が必要
+      if (allCards.length > 0 && groupHeaders.length === 0) {
+        console.log('[FolderLM FilterManager] Group recovery needed: no group headers found');
+        return true;
+      }
+
+      // グループ化済みカードがない場合
+      if (allCards.length > 0 && groupedCards.length === 0) {
+        console.log('[FolderLM FilterManager] Group recovery needed: no grouped cards found');
+        return true;
+      }
+    }
+
+    // フィルタ適用時は sort モードと同様のチェック
+    return this._checkSortRecoveryNeeded(container);
+  }
+
+  /**
    * viewMode の実際の適用処理
    * @private
    */
@@ -296,7 +399,8 @@ class FilterManager {
       case VIEW_MODES.GROUP:
         // group モード: フォルダ順に並び替え + グループヘッダー
         // 「すべて」選択時のみ有効
-        this._groupByFolder();
+        // フォールバック付きで実行
+        this._groupByFolderWithFallback();
         break;
 
       default:
@@ -317,6 +421,55 @@ class FilterManager {
     this._clearSortState();
 
     console.log('[FolderLM FilterManager] viewMode state cleared');
+  }
+
+  /**
+   * グループモードを適用（フォールバック付き）
+   * グループ維持が困難な場合は sort モードにフォールバック
+   * @private
+   */
+  _groupByFolderWithFallback() {
+    try {
+      this._groupByFolder();
+
+      // グループヘッダーが正しく挿入されたか確認
+      const container = document.querySelector(NOTE_SELECTORS.LIST_CONTAINER);
+      if (container && !this.isFilterActive()) {
+        const groupHeaders = container.querySelectorAll(`.${FOLDERLM_CLASSES.GROUP_HEADER}`);
+        const groupedCards = container.querySelectorAll(`.${FOLDERLM_CLASSES.GROUPED}`);
+
+        // グループ化済みカードがあるのにヘッダーがない場合は失敗
+        if (groupedCards.length > 0 && groupHeaders.length === 0) {
+          throw new Error('Group headers not inserted properly');
+        }
+      }
+
+      // 成功したら失敗カウントをリセット
+      this._groupModeFailureCount = 0;
+
+    } catch (error) {
+      console.error('[FolderLM FilterManager] Group mode failed:', error);
+      this._groupModeFailureCount++;
+
+      // 失敗が続く場合は sort モードにフォールバック
+      if (this._groupModeFailureCount >= this._groupModeFailureThreshold) {
+        console.warn('[FolderLM FilterManager] Group mode failed repeatedly, falling back to sort mode');
+        this._clearGroupHeaders();
+        this._sortByFolder();
+
+        // 通知
+        this._notifyChange({
+          type: 'viewmode_fallback',
+          fromMode: VIEW_MODES.GROUP,
+          toMode: VIEW_MODES.SORT,
+          reason: 'repeated_failure',
+        });
+      } else {
+        // 失敗回数がしきい値未満なら sort で代替
+        this._clearGroupHeaders();
+        this._sortByFolder();
+      }
+    }
   }
 
   // ==========================================================================
@@ -1034,6 +1187,7 @@ class FilterManager {
       viewMode: this._viewMode,
       originalIndexInitialized: this._originalIndexInitialized,
       notebookLMFilter: this._detectNotebookLMFilter(),
+      groupModeFailureCount: this._groupModeFailureCount,
       visibleNotes: 0,
       hiddenNotes: 0,
     };
@@ -1057,6 +1211,7 @@ class FilterManager {
     console.log('View mode:', info.viewMode);
     console.log('Original index initialized:', info.originalIndexInitialized);
     console.log('NotebookLM filter:', info.notebookLMFilter);
+    console.log('Group mode failure count:', info.groupModeFailureCount);
     console.log('Visible notes:', info.visibleNotes);
     console.log('Hidden notes:', info.hiddenNotes);
     console.groupEnd();
