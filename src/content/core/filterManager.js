@@ -7,7 +7,7 @@
  * @module content/core/filterManager
  */
 
-import { FOLDERLM_CLASSES, FILTER_SELECTORS } from '../utils/selectors.js';
+import { FOLDERLM_CLASSES, FILTER_SELECTORS, VIEW_MODES, DATA_ATTRIBUTES, NOTE_SELECTORS } from '../utils/selectors.js';
 import { storageManager } from '../../storage/storageManager.js';
 import { noteDetector } from './noteDetector.js';
 import { batchWithRAF } from '../utils/debounce.js';
@@ -17,6 +17,7 @@ import { batchWithRAF } from '../utils/debounce.js';
  * @typedef {Object} FilterState
  * @property {string|null} selectedFolderId - 選択中のフォルダID（null = すべて表示）
  * @property {boolean} isActive - FolderLM フィルタが有効かどうか
+ * @property {string} viewMode - 表示モード（'filter' | 'sort' | 'group'）
  */
 
 /**
@@ -54,6 +55,24 @@ class FilterManager {
      * フィルタ適用のバッチ処理
      */
     this._batchedApply = batchWithRAF(() => this._performFilter());
+
+    /**
+     * 現在の表示モード
+     * storageManager から復元されるまではデフォルト値を使用
+     * @type {string}
+     */
+    this._viewMode = VIEW_MODES.FILTER;
+
+    /**
+     * 元の DOM 順序インデックスが初期化済みかどうか
+     * @type {boolean}
+     */
+    this._originalIndexInitialized = false;
+
+    /**
+     * viewMode 適用のバッチ処理
+     */
+    this._batchedApplyViewMode = batchWithRAF(() => this._performApplyViewMode());
   }
 
   // ==========================================================================
@@ -62,10 +81,18 @@ class FilterManager {
 
   /**
    * フィルタマネージャーを初期化
+   * @param {Object} [options] - 初期化オプション
+   * @param {string} [options.viewMode] - 初期表示モード（storageManager から復元された値）
    */
-  initialize() {
+  initialize(options = {}) {
     // NotebookLM 標準フィルタの監視を開始
     this._startObservingNotebookLMFilter();
+
+    // viewMode を復元（storageManager.load() 完了後に呼び出される想定）
+    if (options.viewMode && Object.values(VIEW_MODES).includes(options.viewMode)) {
+      this._viewMode = options.viewMode;
+      console.log(`[FolderLM FilterManager] viewMode restored from settings: ${this._viewMode}`);
+    }
     
     console.log('[FolderLM FilterManager] Initialized');
   }
@@ -95,11 +122,17 @@ class FilterManager {
     // フィルタを適用
     this._batchedApply();
 
+    // viewMode を適用（filter 以外の場合）
+    if (this._viewMode !== VIEW_MODES.FILTER) {
+      this._batchedApplyViewMode();
+    }
+
     // 変更を通知
     this._notifyChange({
       type: 'folder_selected',
       previousFolderId: previousId,
       currentFolderId: folderId,
+      viewMode: this._viewMode,
     });
 
     console.log(`[FolderLM FilterManager] Folder selected: ${folderId || 'all'}`);
@@ -126,6 +159,10 @@ class FilterManager {
   reapplyFilter() {
     if (this.isFilterActive()) {
       this._batchedApply();
+    }
+    // viewMode も再適用
+    if (this._viewMode !== VIEW_MODES.FILTER) {
+      this._batchedApplyViewMode();
     }
   }
 
@@ -177,6 +214,184 @@ class FilterManager {
     this._stopObservingNotebookLMFilter();
     this._changeListeners = [];
     this._selectedFolderId = null;
+    this._viewMode = VIEW_MODES.FILTER;
+    this._originalIndexInitialized = false;
+    this._clearViewModeState();
+  }
+
+  // ==========================================================================
+  // viewMode 管理
+  // ==========================================================================
+
+  /**
+   * 現在の表示モードを取得
+   * @returns {string} 'filter' | 'sort' | 'group'
+   */
+  getViewMode() {
+    return this._viewMode;
+  }
+
+  /**
+   * 表示モードを変更して適用
+   * @param {string} mode - 'filter' | 'sort' | 'group'
+   * @returns {boolean} 成功した場合 true
+   */
+  setViewMode(mode) {
+    if (!Object.values(VIEW_MODES).includes(mode)) {
+      console.warn(`[FolderLM FilterManager] Invalid viewMode: ${mode}`);
+      return false;
+    }
+
+    const previousMode = this._viewMode;
+    if (previousMode === mode) {
+      return true;
+    }
+
+    this._viewMode = mode;
+
+    // storageManager に保存
+    storageManager.setViewMode(mode);
+
+    // viewMode を適用
+    this._batchedApplyViewMode();
+
+    // 変更を通知
+    this._notifyChange({
+      type: 'viewmode_changed',
+      previousViewMode: previousMode,
+      currentViewMode: mode,
+    });
+
+    console.log(`[FolderLM FilterManager] viewMode changed: ${previousMode} -> ${mode}`);
+    return true;
+  }
+
+  /**
+   * 表示モードを適用（外部からの呼び出し用）
+   * domRecoveryManager からの復帰時に使用
+   */
+  applyViewMode() {
+    this._batchedApplyViewMode();
+  }
+
+  /**
+   * viewMode の実際の適用処理
+   * @private
+   */
+  _performApplyViewMode() {
+    // 元の DOM 順序インデックスを初期化（必要な場合）
+    this._initializeOriginalIndices();
+
+    switch (this._viewMode) {
+      case VIEW_MODES.FILTER:
+        // filter モード: 並び替えなし、フィルタのみ
+        this._clearViewModeState();
+        break;
+
+      case VIEW_MODES.SORT:
+        // sort モード: フォルダ順に並び替え、ヘッダーなし
+        // Phase 2 で実装予定
+        console.log('[FolderLM FilterManager] sort mode - will be implemented in Phase 2');
+        break;
+
+      case VIEW_MODES.GROUP:
+        // group モード: フォルダ順に並び替え + グループヘッダー
+        // 「すべて」選択時のみ有効
+        // Phase 3 で実装予定
+        console.log('[FolderLM FilterManager] group mode - will be implemented in Phase 3');
+        break;
+
+      default:
+        console.warn(`[FolderLM FilterManager] Unknown viewMode: ${this._viewMode}`);
+    }
+  }
+
+  /**
+   * viewMode の状態をクリア（filter モードに戻す時）
+   * @private
+   */
+  _clearViewModeState() {
+    // CSS order をリセット
+    const container = document.querySelector(NOTE_SELECTORS.LIST_CONTAINER);
+    if (container) {
+      const cards = container.querySelectorAll(`[${DATA_ATTRIBUTES.ORDER}]`);
+      cards.forEach(card => {
+        card.style.order = '';
+        card.removeAttribute(DATA_ATTRIBUTES.ORDER);
+        card.classList.remove(FOLDERLM_CLASSES.SORTED);
+        card.classList.remove(FOLDERLM_CLASSES.GROUPED);
+      });
+    }
+
+    // グループヘッダーを削除
+    const headers = document.querySelectorAll(`.${FOLDERLM_CLASSES.GROUP_HEADER}`);
+    headers.forEach(header => header.remove());
+
+    console.log('[FolderLM FilterManager] viewMode state cleared');
+  }
+
+  // ==========================================================================
+  // 元の DOM 順序インデックス管理
+  // ==========================================================================
+
+  /**
+   * 元の DOM 順序インデックスを初期化
+   * スキャン時の元の位置を記録し、安定ソートに使用
+   * @private
+   */
+  _initializeOriginalIndices() {
+    const container = document.querySelector(NOTE_SELECTORS.LIST_CONTAINER);
+    if (!container) {
+      console.warn('[FolderLM FilterManager] List container not found');
+      return;
+    }
+
+    const noteIds = noteDetector.getAllNoteIds();
+    let index = 0;
+
+    for (const noteId of noteIds) {
+      const card = noteDetector.getCardByNoteId(noteId);
+      if (card) {
+        // 既にインデックスがある場合はスキップ（再スキャン時に保持）
+        if (!this._originalIndexInitialized || !card.hasAttribute(DATA_ATTRIBUTES.ORIGINAL_INDEX)) {
+          card.setAttribute(DATA_ATTRIBUTES.ORIGINAL_INDEX, String(index));
+          card.classList.add(FOLDERLM_CLASSES.HAS_ORIGINAL_INDEX);
+        }
+        index++;
+      }
+    }
+
+    this._originalIndexInitialized = true;
+    console.log(`[FolderLM FilterManager] Original indices initialized for ${index} cards`);
+  }
+
+  /**
+   * 元の DOM 順序インデックスをリセット
+   * DOM が大きく変更された時（仲間化リレンダリングなど）に呼び出す
+   */
+  resetOriginalIndices() {
+    const cards = document.querySelectorAll(`[${DATA_ATTRIBUTES.ORIGINAL_INDEX}]`);
+    cards.forEach(card => {
+      card.removeAttribute(DATA_ATTRIBUTES.ORIGINAL_INDEX);
+      card.classList.remove(FOLDERLM_CLASSES.HAS_ORIGINAL_INDEX);
+    });
+
+    this._originalIndexInitialized = false;
+    console.log('[FolderLM FilterManager] Original indices reset');
+  }
+
+  /**
+   * カードの元のインデックスを取得
+   * @param {Element} card - ノートカード要素
+   * @returns {number} インデックス（取得できない場合は Infinity）
+   */
+  getOriginalIndex(card) {
+    const indexStr = card.getAttribute(DATA_ATTRIBUTES.ORIGINAL_INDEX);
+    if (indexStr !== null) {
+      const index = parseInt(indexStr, 10);
+      return isNaN(index) ? Infinity : index;
+    }
+    return Infinity;
   }
 
   // ==========================================================================
@@ -391,6 +606,7 @@ class FilterManager {
       timestamp: Date.now(),
       selectedFolderId: this._selectedFolderId,
       isFilterActive: this.isFilterActive(),
+      viewMode: this._viewMode,
     };
 
     for (const listener of this._changeListeners) {
@@ -414,6 +630,8 @@ class FilterManager {
     const info = {
       selectedFolderId: this._selectedFolderId,
       isFilterActive: this.isFilterActive(),
+      viewMode: this._viewMode,
+      originalIndexInitialized: this._originalIndexInitialized,
       notebookLMFilter: this._detectNotebookLMFilter(),
       visibleNotes: 0,
       hiddenNotes: 0,
@@ -435,6 +653,8 @@ class FilterManager {
     console.group('[FolderLM FilterManager] Debug Info');
     console.log('Selected folder:', info.selectedFolderId || 'all');
     console.log('Filter active:', info.isFilterActive);
+    console.log('View mode:', info.viewMode);
+    console.log('Original index initialized:', info.originalIndexInitialized);
     console.log('NotebookLM filter:', info.notebookLMFilter);
     console.log('Visible notes:', info.visibleNotes);
     console.log('Hidden notes:', info.hiddenNotes);

@@ -10,7 +10,9 @@
 import { 
   NOTE_SELECTORS, 
   UI_INJECTION_SELECTORS,
-  FOLDERLM_CLASSES 
+  FOLDERLM_CLASSES,
+  VIEW_MODES,
+  DATA_ATTRIBUTES
 } from '../utils/selectors.js';
 import { debounce } from '../utils/debounce.js';
 
@@ -241,7 +243,37 @@ class DOMRecoveryManager {
       }
     }
 
+    // viewMode の状態チェック（sort/group モードの場合）
+    if (this._checkViewModeRecoveryNeeded()) {
+      console.log('[FolderLM DOMRecoveryManager] ViewMode state needs recovery');
+      return true;
+    }
+
     return false;
+  }
+
+  /**
+   * viewMode の復帰が必要かどうかをチェック
+   * @returns {boolean}
+   * @private
+   */
+  _checkViewModeRecoveryNeeded() {
+    // viewMode コールバックが登録されていれば、そちらに確認を委譲
+    if (this._viewModeCheckCallback) {
+      return this._viewModeCheckCallback();
+    }
+    return false;
+  }
+
+  /**
+   * viewMode 復帰チェック用のコールバックを登録
+   * filterManager から呼び出される
+   * @param {Function} callback - () => boolean
+   */
+  setViewModeCheckCallback(callback) {
+    if (typeof callback === 'function') {
+      this._viewModeCheckCallback = callback;
+    }
   }
 
   // ==========================================================================
@@ -437,6 +469,7 @@ class DOMRecoveryManager {
     console.log('Last recovery:', new Date(this.lastRecoveryTime).toISOString());
     console.log('Recovery callbacks:', this._recoveryCallbacks.length);
     console.log('Visibility listeners:', this._visibilityListeners.length);
+    console.log('ViewMode check callback:', !!this._viewModeCheckCallback);
     console.groupEnd();
 
     return {
@@ -446,6 +479,7 @@ class DOMRecoveryManager {
       lastRecoveryTime: this.lastRecoveryTime,
       callbackCount: this._recoveryCallbacks.length,
       listenerCount: this._visibilityListeners.length,
+      hasViewModeCheckCallback: !!this._viewModeCheckCallback,
     };
   }
 }
