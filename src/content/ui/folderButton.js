@@ -68,7 +68,7 @@ class FolderButton {
 
     // アイコンを設定
     const icon = document.createElement('span');
-    icon.textContent = '📁';
+    icon.textContent = '📂';
     icon.setAttribute('aria-hidden', 'true');
     button.appendChild(icon);
 

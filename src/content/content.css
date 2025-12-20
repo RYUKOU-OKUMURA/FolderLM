@@ -244,7 +244,8 @@
 .folderlm-assign-button {
   position: absolute;
   top: 12px;
-  right: 12px;
+  left: 12px;
+  right: auto;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -262,14 +263,20 @@
   z-index: 10;
 }
 
+/* 絵文字アイコンの右横に配置する場合 */
 /* ホバー時に表示 */
 [data-folderlm-note-id]:hover .folderlm-assign-button,
+[data-folderlm-note-id]:hover + .folderlm-assign-button,
+[data-folderlm-note-id]:hover ~ .folderlm-assign-button,
+.folderlm-assign-host:hover .folderlm-assign-button,
+.folderlm-assign-button:hover,
 .folderlm-assign-button:focus {
   opacity: 1;
 }
 
 .folderlm-assign-button:hover {
   background-color: #fff;
+  opacity: 1;
   transform: scale(1.05);
   box-shadow: 0 3px 8px rgba(0, 0, 0, 0.2);
 }
@@ -444,6 +451,24 @@
    フォルダバッジ
    ========================================================================== */
 
+.folderlm-folder-badge-container {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  width: 100%;
+  flex: 0 0 100%;
+}
+
+.folderlm-folder-badge-container--icon {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  width: auto;
+  flex: 0 0 auto;
+  pointer-events: none;
+}
+
 .folderlm-folder-badge {
   display: inline-flex;
   align-items: center;
@@ -455,6 +480,14 @@
   color: #1a73e8;
   max-width: 160px;
   line-height: 1.4;
+}
+
+.folderlm-folder-badge-container--icon .folderlm-folder-badge {
+  margin-top: 0;
+  padding: 2px 6px;
+  font-size: 10px;
+  max-width: 120px;
+  line-height: 1.2;
 }
 
 .folderlm-folder-badge-icon {

@@ -247,7 +247,8 @@ class SafetyManager {
       `.${FOLDERLM_CLASSES.FOLDER_DROPDOWN}, ` +
       `.${FOLDERLM_CLASSES.ASSIGN_BUTTON}, ` +
       `.${FOLDERLM_CLASSES.SELECT_POPUP}, ` +
-      `.${FOLDERLM_CLASSES.FOLDER_BADGE}`
+      `.${FOLDERLM_CLASSES.FOLDER_BADGE}, ` +
+      `.${FOLDERLM_CLASSES.FOLDER_BADGE_CONTAINER}`
     );
 
     for (const el of elements) {

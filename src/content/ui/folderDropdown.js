@@ -321,7 +321,7 @@ class FolderDropdown {
     // アイコン
     const icon = document.createElement('span');
     icon.className = 'folderlm-folder-item-icon';
-    icon.textContent = folder.isDefault ? '📥' : '📁';
+    icon.textContent = folder.isDefault ? '📥' : '📂';
     icon.setAttribute('aria-hidden', 'true');
     item.appendChild(icon);
 

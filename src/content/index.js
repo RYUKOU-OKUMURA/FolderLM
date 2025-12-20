@@ -30,6 +30,13 @@ class FolderLM {
     this.retryCount = 0;
     this.maxRetries = 3;
     this.retryDelay = 1000;
+    this._currentUrl = window.location.href;
+    this._routeCheckInterval = null;
+    this._routeChangeInProgress = false;
+    this._pendingRouteChange = false;
+    this._pendingRouteUrl = null;
+    this._pendingRoutePrevUrl = null;
+    this._boundCheckUrl = null;
 
     // noteDetector と safetyManager への参照
     this.noteDetector = noteDetector;
@@ -87,6 +94,101 @@ class FolderLM {
   }
 
   /**
+   * ルート変更の監視を開始
+   */
+  _setupRouteChangeWatcher() {
+    if (this._routeCheckInterval) {
+      return;
+    }
+
+    this._currentUrl = window.location.href;
+    this._boundCheckUrl = () => this._checkForRouteChange();
+
+    window.addEventListener('popstate', this._boundCheckUrl);
+    window.addEventListener('hashchange', this._boundCheckUrl);
+
+    this._routeCheckInterval = window.setInterval(this._boundCheckUrl, 500);
+  }
+
+  /**
+   * ルート変更があれば処理を開始
+   * @private
+   */
+  _checkForRouteChange() {
+    const nextUrl = window.location.href;
+    if (nextUrl === this._currentUrl) {
+      return;
+    }
+
+    const prevUrl = this._currentUrl;
+    this._currentUrl = nextUrl;
+    this._handleRouteChange(prevUrl, nextUrl);
+  }
+
+  /**
+   * ルート変更時の復帰処理
+   * @param {string} prevUrl
+   * @param {string} nextUrl
+   * @private
+   */
+  async _handleRouteChange(prevUrl, nextUrl) {
+    console.log(`[FolderLM] Route change detected: ${prevUrl} -> ${nextUrl}`);
+
+    if (this._routeChangeInProgress) {
+      this._pendingRouteChange = true;
+      this._pendingRouteUrl = nextUrl;
+      this._pendingRoutePrevUrl = prevUrl;
+      return;
+    }
+
+    this._routeChangeInProgress = true;
+
+    try {
+      const ready = await this.waitForDOM();
+      if (!ready) {
+        console.log('[FolderLM] DOM not ready after route change, skipping recovery');
+        return;
+      }
+
+      if (this.safetyManager.isStopped()) {
+        this.safetyManager.recover();
+      }
+
+      await this.noteDetector.scanNotes();
+      this.injectFolderButton();
+      this.processNoteCards();
+      this.filterManager.reapplyFilter();
+      this.startObserver();
+    } finally {
+      this._routeChangeInProgress = false;
+      if (this._pendingRouteChange) {
+        this._pendingRouteChange = false;
+        const queuedPrevUrl = this._pendingRoutePrevUrl || this._currentUrl;
+        const queuedNextUrl = this._pendingRouteUrl || window.location.href;
+        this._pendingRouteUrl = null;
+        this._pendingRoutePrevUrl = null;
+        this._handleRouteChange(queuedPrevUrl, queuedNextUrl);
+      }
+    }
+  }
+
+  /**
+   * ルート変更監視を停止
+   */
+  _teardownRouteChangeWatcher() {
+    if (this._routeCheckInterval) {
+      clearInterval(this._routeCheckInterval);
+      this._routeCheckInterval = null;
+    }
+
+    if (this._boundCheckUrl) {
+      window.removeEventListener('popstate', this._boundCheckUrl);
+      window.removeEventListener('hashchange', this._boundCheckUrl);
+      this._boundCheckUrl = null;
+    }
+  }
+
+  /**
    * 安全停止時の処理
    */
   _handleSafetyStop() {
@@ -127,6 +229,8 @@ class FolderLM {
     console.log('[FolderLM] Initializing...');
 
     try {
+      this._setupRouteChangeWatcher();
+
       // 1. ストレージからデータを読み込み
       try {
         await storageManager.load();
@@ -519,9 +623,21 @@ class FolderLM {
    */
   _updateFolderBadge(card, noteId) {
     // 既存のバッジを削除
-    const existingBadge = card.querySelector(`.${FOLDERLM_CLASSES.FOLDER_BADGE}`);
-    if (existingBadge) {
-      existingBadge.remove();
+    const existingByNote = document.querySelectorAll(
+      `.${FOLDERLM_CLASSES.FOLDER_BADGE_CONTAINER}[data-folderlm-badge-note-id="${noteId}"]`
+    );
+    if (existingByNote.length > 0) {
+      existingByNote.forEach(el => el.remove());
+    }
+
+    const existingContainer = card.querySelector(`.${FOLDERLM_CLASSES.FOLDER_BADGE_CONTAINER}`);
+    if (existingContainer) {
+      existingContainer.remove();
+    } else {
+      const existingBadge = card.querySelector(`.${FOLDERLM_CLASSES.FOLDER_BADGE}`);
+      if (existingBadge) {
+        existingBadge.remove();
+      }
     }
 
     const folderId = storageManager.getNoteFolder(noteId);
@@ -544,7 +660,7 @@ class FolderLM {
 
     const icon = document.createElement('span');
     icon.className = 'folderlm-folder-badge-icon';
-    icon.textContent = '📁';
+    icon.textContent = '📂';
     icon.setAttribute('aria-hidden', 'true');
     badge.appendChild(icon);
 
@@ -553,14 +669,40 @@ class FolderLM {
     name.textContent = folder.name;
     badge.appendChild(name);
 
-    // バッジを挿入（カード内の適切な位置を探す）
-    // ノートカードの構造によって調整が必要な場合がある
-    const titleElement = card.querySelector('[id*="project-"][id*="-title"]');
-    if (titleElement && titleElement.parentElement) {
-      titleElement.parentElement.appendChild(badge);
+    const badgeContainer = document.createElement('div');
+    badgeContainer.className = FOLDERLM_CLASSES.FOLDER_BADGE_CONTAINER;
+    badgeContainer.setAttribute('data-folderlm-badge-note-id', noteId);
+    badgeContainer.appendChild(badge);
+
+    const host = card.closest('[role="listitem"]') || card.parentElement || card;
+    const emojiId = `project-${noteId}-emoji`;
+    let iconElement = host.querySelector(`#${emojiId}`) ||
+      document.getElementById(emojiId);
+
+    if (!iconElement) {
+      iconElement = host.querySelector('[id*="project-"][id*="-emoji"]') ||
+        host.querySelector('.project-button-box-icon');
+    }
+
+    if (iconElement && iconElement.parentElement) {
+      badgeContainer.classList.add(FOLDERLM_CLASSES.FOLDER_BADGE_CONTAINER_ICON);
+      iconElement.insertAdjacentElement('afterend', badgeContainer);
     } else {
-      // フォールバック: カードの先頭付近に追加
-      card.appendChild(badge);
+      // バッジを挿入（カード内の空いているスペースへ）
+      const subtitleElement = host.querySelector(`#project-${noteId}-subtitle`) ||
+        host.querySelector('[id*="project-"][id*="-subtitle"]');
+      const descriptionElement = host.querySelector(NOTE_SELECTORS.CARD_DESCRIPTION);
+      const titleElement = host.querySelector(NOTE_SELECTORS.CARD_TITLE);
+      const anchorElement = subtitleElement || descriptionElement || titleElement;
+
+      if (anchorElement && anchorElement.parentElement) {
+        const anchorBlock = anchorElement.parentElement;
+        const insertHost = anchorBlock.parentElement || host;
+        insertHost.insertBefore(badgeContainer, anchorBlock.nextSibling);
+      } else {
+        // フォールバック: カード末尾に追加
+        host.appendChild(badgeContainer);
+      }
     }
 
     card.setAttribute('data-folderlm-folder-id', folderId);
@@ -734,6 +876,8 @@ class FolderLM {
       this.observer = null;
     }
 
+    this._teardownRouteChangeWatcher();
+
     // UI コンポーネントをクリーンアップ
     this.folderButton.destroy();
     this.folderDropdown.destroy();
@@ -754,6 +898,7 @@ class FolderLM {
     document.querySelectorAll(`.${FOLDERLM_CLASSES.ASSIGN_BUTTON}`).forEach(el => el.remove());
     document.querySelectorAll(`.${FOLDERLM_CLASSES.SELECT_POPUP}`).forEach(el => el.remove());
     document.querySelectorAll(`.${FOLDERLM_CLASSES.FOLDER_BADGE}`).forEach(el => el.remove());
+    document.querySelectorAll(`.${FOLDERLM_CLASSES.FOLDER_BADGE_CONTAINER}`).forEach(el => el.remove());
 
     this.initialized = false;
     console.log('[FolderLM] Destroyed');

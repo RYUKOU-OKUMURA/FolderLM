@@ -276,7 +276,7 @@ class FolderSelectPopup {
     // アイコン
     const icon = document.createElement('span');
     icon.className = 'folderlm-select-popup-item-icon';
-    icon.textContent = folder.isDefault ? '📥' : '📁';
+    icon.textContent = folder.isDefault ? '📥' : '📂';
     icon.setAttribute('aria-hidden', 'true');
     icon.style.marginRight = '8px';
     item.appendChild(icon);

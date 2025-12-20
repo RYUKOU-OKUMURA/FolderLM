@@ -154,6 +154,16 @@ export const FOLDERLM_CLASSES = {
   FOLDER_BADGE: 'folderlm-folder-badge',
 
   /**
+   * フォルダバッジのコンテナ
+   */
+  FOLDER_BADGE_CONTAINER: 'folderlm-folder-badge-container',
+
+  /**
+   * フォルダバッジのアイコン横配置用コンテナ
+   */
+  FOLDER_BADGE_CONTAINER_ICON: 'folderlm-folder-badge-container--icon',
+
+  /**
    * 非表示状態（フィルタで除外されたノート）
    */
   HIDDEN: 'folderlm-hidden',
