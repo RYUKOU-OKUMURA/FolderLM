@@ -207,6 +207,20 @@ export const FOLDERLM_CLASSES = {
    * 元の DOM 順序インデックスを保持するためのクラス
    */
   HAS_ORIGINAL_INDEX: 'folderlm-has-original-index',
+
+  // ==========================================================================
+  // Phase 5: viewMode セレクタ UI 関連のクラス
+  // ==========================================================================
+
+  /**
+   * 表示モードセレクタのコンテナ
+   */
+  VIEW_MODE_SELECTOR: 'folderlm-viewmode-selector',
+
+  /**
+   * 表示モードのインジケーター（フォルダボタン付近に表示）
+   */
+  VIEW_MODE_INDICATOR: 'folderlm-viewmode-indicator',
 };
 
 /**
