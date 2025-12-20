@@ -290,8 +290,7 @@ class FilterManager {
 
       case VIEW_MODES.SORT:
         // sort モード: フォルダ順に並び替え、ヘッダーなし
-        // Phase 2 で実装予定
-        console.log('[FolderLM FilterManager] sort mode - will be implemented in Phase 2');
+        this._sortByFolder();
         break;
 
       case VIEW_MODES.GROUP:
@@ -311,14 +310,14 @@ class FilterManager {
    * @private
    */
   _clearViewModeState() {
-    // CSS order をリセット
+    // ソート状態をクリア（CSS order リセット + DOM 順序復元）
+    this._clearSortState();
+
+    // グループ状態をクリア（グループヘッダー削除）
     const container = document.querySelector(NOTE_SELECTORS.LIST_CONTAINER);
     if (container) {
-      const cards = container.querySelectorAll(`[${DATA_ATTRIBUTES.ORDER}]`);
-      cards.forEach(card => {
-        card.style.order = '';
-        card.removeAttribute(DATA_ATTRIBUTES.ORDER);
-        card.classList.remove(FOLDERLM_CLASSES.SORTED);
+      const groupedCards = container.querySelectorAll(`.${FOLDERLM_CLASSES.GROUPED}`);
+      groupedCards.forEach(card => {
         card.classList.remove(FOLDERLM_CLASSES.GROUPED);
       });
     }
@@ -392,6 +391,224 @@ class FilterManager {
       return isNaN(index) ? Infinity : index;
     }
     return Infinity;
+  }
+
+  // ==========================================================================
+  // Phase 2: ソートモード実装
+  // ==========================================================================
+
+  /**
+   * フォルダ順でノートを並べ替え
+   * CSS order を優先し、不可能な場合は DOM 並べ替えにフォールバック
+   * @private
+   */
+  _sortByFolder() {
+    const container = document.querySelector(NOTE_SELECTORS.LIST_CONTAINER);
+    if (!container) {
+      console.warn('[FolderLM FilterManager] List container not found for sorting');
+      return;
+    }
+
+    // NotebookLM フィルタ通過後の可視ノートのみを対象にする
+    const visibleNotes = this._getVisibleNotes();
+    if (visibleNotes.length === 0) {
+      console.log('[FolderLM FilterManager] No visible notes to sort');
+      return;
+    }
+
+    // フォルダ順 + 元インデックスで安定並べ替えを計算
+    const sortedNotes = this._calculateSortOrder(visibleNotes);
+
+    // CSS order をサポートしているか確認
+    const orderSupported = this._isOrderSupported(container);
+
+    if (orderSupported) {
+      // CSS order を適用
+      this._applyCssOrder(sortedNotes);
+      console.log(`[FolderLM FilterManager] Sort applied via CSS order (${sortedNotes.length} notes)`);
+    } else {
+      // DOM 並べ替えにフォールバック
+      this._applyDomReorder(container, sortedNotes);
+      console.log(`[FolderLM FilterManager] Sort applied via DOM reorder (${sortedNotes.length} notes)`);
+    }
+  }
+
+  /**
+   * NotebookLM フィルタ通過後の可視ノートを取得
+   * @returns {Array<{noteId: string, card: Element}>}
+   * @private
+   */
+  _getVisibleNotes() {
+    const noteIds = noteDetector.getAllNoteIds();
+    const visibleNotes = [];
+
+    for (const noteId of noteIds) {
+      const card = noteDetector.getCardByNoteId(noteId);
+      if (!card) continue;
+
+      // FolderLM で非表示にされていないことを確認
+      if (card.classList.contains(FOLDERLM_CLASSES.HIDDEN)) {
+        continue;
+      }
+
+      // NotebookLM 標準フィルタで非表示にされていないことを確認
+      if (this._isHiddenByNotebookLM(card)) {
+        continue;
+      }
+
+      visibleNotes.push({ noteId, card });
+    }
+
+    return visibleNotes;
+  }
+
+  /**
+   * フォルダ順 + 元インデックスでソート順序を計算（安定ソート）
+   * @param {Array<{noteId: string, card: Element}>} notes - ノートリスト
+   * @returns {Array<{noteId: string, card: Element, folderId: string, folderOrder: number, originalIndex: number}>}
+   * @private
+   */
+  _calculateSortOrder(notes) {
+    const folders = storageManager.getFolders();
+    const folderOrderMap = new Map();
+    
+    // フォルダIDから順序へのマッピングを作成
+    folders.forEach((folder, index) => {
+      folderOrderMap.set(folder.id, index);
+    });
+
+    // 「未分類」フォルダの順序（デフォルトは最大値）
+    const uncategorizedOrder = folderOrderMap.get(storageManager.UNCATEGORIZED_ID) ?? Infinity;
+
+    // ノートにソート情報を付加
+    const notesWithSortInfo = notes.map(({ noteId, card }) => {
+      const folderId = storageManager.getNoteFolder(noteId) || storageManager.UNCATEGORIZED_ID;
+      const folderOrder = folderOrderMap.get(folderId) ?? uncategorizedOrder;
+      const originalIndex = this.getOriginalIndex(card);
+
+      return {
+        noteId,
+        card,
+        folderId,
+        folderOrder,
+        originalIndex,
+      };
+    });
+
+    // 安定ソート: フォルダ順 -> 元のインデックス順
+    notesWithSortInfo.sort((a, b) => {
+      // まずフォルダ順で比較
+      if (a.folderOrder !== b.folderOrder) {
+        return a.folderOrder - b.folderOrder;
+      }
+      // 同じフォルダ内では元のインデックスで比較（安定ソート）
+      return a.originalIndex - b.originalIndex;
+    });
+
+    return notesWithSortInfo;
+  }
+
+  /**
+   * コンテナが CSS order をサポートしているか確認
+   * @param {Element} container - リストコンテナ
+   * @returns {boolean}
+   * @private
+   */
+  _isOrderSupported(container) {
+    const computedStyle = window.getComputedStyle(container);
+    const display = computedStyle.display;
+
+    // flex または grid レイアウトの場合は order をサポート
+    const supportsOrder = [
+      'flex',
+      'inline-flex',
+      'grid',
+      'inline-grid',
+    ].includes(display);
+
+    return supportsOrder;
+  }
+
+  /**
+   * CSS order を適用
+   * @param {Array<{card: Element}>} sortedNotes - ソート済みノートリスト
+   * @private
+   */
+  _applyCssOrder(sortedNotes) {
+    sortedNotes.forEach((note, index) => {
+      const { card } = note;
+      const orderValue = index + 1; // 1から開始
+
+      // CSS order を設定
+      card.style.order = String(orderValue);
+      card.setAttribute(DATA_ATTRIBUTES.ORDER, String(orderValue));
+      card.classList.add(FOLDERLM_CLASSES.SORTED);
+    });
+  }
+
+  /**
+   * DOM 並べ替えを適用（フォールバック）
+   * @param {Element} container - リストコンテナ
+   * @param {Array<{card: Element}>} sortedNotes - ソート済みノートリスト
+   * @private
+   */
+  _applyDomReorder(container, sortedNotes) {
+    // DocumentFragment を使用してバッチ処理
+    const fragment = document.createDocumentFragment();
+
+    // ソート順にカードを fragment に追加
+    sortedNotes.forEach((note, index) => {
+      const { card } = note;
+      card.classList.add(FOLDERLM_CLASSES.SORTED);
+      card.setAttribute(DATA_ATTRIBUTES.ORDER, String(index + 1));
+      fragment.appendChild(card);
+    });
+
+    // 一括で DOM に挿入（リフローを最小化）
+    container.appendChild(fragment);
+  }
+
+  /**
+   * ソート状態をクリア（filter モードに戻す時）
+   * CSS order のリセットと DOM 順序の復元を行う
+   * @private
+   */
+  _clearSortState() {
+    const container = document.querySelector(NOTE_SELECTORS.LIST_CONTAINER);
+    if (!container) return;
+
+    // ソート済みカードを取得
+    const sortedCards = container.querySelectorAll(`.${FOLDERLM_CLASSES.SORTED}`);
+    if (sortedCards.length === 0) return;
+
+    // CSS order をリセット
+    sortedCards.forEach(card => {
+      card.style.order = '';
+      card.removeAttribute(DATA_ATTRIBUTES.ORDER);
+      card.classList.remove(FOLDERLM_CLASSES.SORTED);
+    });
+
+    // DOM 並べ替えが行われていた場合、元の順序に復元
+    // 元のインデックスでソートして復元
+    const cardsWithIndex = Array.from(sortedCards).map(card => ({
+      card,
+      originalIndex: this.getOriginalIndex(card),
+    }));
+
+    // 元のインデックスが設定されている場合のみ復元
+    const hasOriginalIndices = cardsWithIndex.some(item => item.originalIndex !== Infinity);
+    
+    if (hasOriginalIndices) {
+      cardsWithIndex.sort((a, b) => a.originalIndex - b.originalIndex);
+
+      const fragment = document.createDocumentFragment();
+      cardsWithIndex.forEach(({ card }) => {
+        fragment.appendChild(card);
+      });
+      container.appendChild(fragment);
+    }
+
+    console.log('[FolderLM FilterManager] Sort state cleared');
   }
 
   // ==========================================================================
