@@ -8,6 +8,7 @@
  */
 
 import { debounce } from '../content/utils/debounce.js';
+import { VIEW_MODES } from '../content/utils/selectors.js';
 
 /**
  * ストレージのキー名
@@ -65,13 +66,21 @@ const ERROR_TYPES = {
 };
 
 /**
+ * デフォルト設定
+ */
+const DEFAULT_SETTINGS = {
+  /** 表示モード（filter/sort/group） */
+  viewMode: VIEW_MODES.FILTER,
+};
+
+/**
  * Storage Manager クラス
  */
 class StorageManager {
   constructor() {
     this.folders = [...DEFAULT_FOLDERS];
     this.noteAssignments = {};
-    this.settings = {};
+    this.settings = { ...DEFAULT_SETTINGS };
     this.loaded = false;
 
     // 保存処理をデバウンス（300ms）
@@ -143,7 +152,7 @@ class StorageManager {
       // データの読み込みとバリデーション
       this.folders = this._validateFolders(data[STORAGE_KEYS.FOLDERS]);
       this.noteAssignments = this._validateNoteAssignments(data[STORAGE_KEYS.NOTE_ASSIGNMENTS]);
-      this.settings = data[STORAGE_KEYS.SETTINGS] || {};
+      this.settings = this._validateSettings(data[STORAGE_KEYS.SETTINGS]);
 
       this.loaded = true;
       console.log('[FolderLM Storage] Data loaded:', {
@@ -599,8 +608,28 @@ class StorageManager {
   _resetToDefaults() {
     this.folders = [...DEFAULT_FOLDERS];
     this.noteAssignments = {};
-    this.settings = {};
+    this.settings = { ...DEFAULT_SETTINGS };
     this.loaded = true;
+  }
+
+  /**
+   * 設定のバリデーション
+   * @param {Object} settings - 設定オブジェクト
+   * @returns {Object} バリデーション済み設定オブジェクト
+   */
+  _validateSettings(settings) {
+    const validatedSettings = { ...DEFAULT_SETTINGS };
+
+    if (!settings || typeof settings !== 'object') {
+      return validatedSettings;
+    }
+
+    // viewMode のバリデーション
+    if (settings.viewMode && Object.values(VIEW_MODES).includes(settings.viewMode)) {
+      validatedSettings.viewMode = settings.viewMode;
+    }
+
+    return validatedSettings;
   }
 
   /**
@@ -811,6 +840,47 @@ class StorageManager {
    */
   get ERROR_TYPES() {
     return { ...ERROR_TYPES };
+  }
+
+  // ==========================================================================
+  // viewMode 操作
+  // ==========================================================================
+
+  /**
+   * 現在の viewMode を取得
+   * @returns {string} 'filter' | 'sort' | 'group'
+   */
+  getViewMode() {
+    return this.settings.viewMode || VIEW_MODES.FILTER;
+  }
+
+  /**
+   * viewMode を設定
+   * @param {string} mode - 'filter' | 'sort' | 'group'
+   * @returns {{ success: boolean, error?: string }}
+   */
+  setViewMode(mode) {
+    if (!Object.values(VIEW_MODES).includes(mode)) {
+      return { success: false, error: `Invalid viewMode: ${mode}` };
+    }
+
+    const previousMode = this.settings.viewMode;
+    if (previousMode === mode) {
+      return { success: true };
+    }
+
+    this.settings.viewMode = mode;
+    this.save();
+
+    console.log(`[FolderLM Storage] viewMode changed: ${previousMode} -> ${mode}`);
+    return { success: true };
+  }
+
+  /**
+   * デフォルト設定を取得
+   */
+  get DEFAULT_SETTINGS() {
+    return { ...DEFAULT_SETTINGS };
   }
 }
 

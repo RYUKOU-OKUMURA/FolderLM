@@ -7,7 +7,7 @@
  * @module content/index
  */
 
-import { NOTE_SELECTORS, UI_INJECTION_SELECTORS, FOLDERLM_CLASSES } from './utils/selectors.js';
+import { NOTE_SELECTORS, UI_INJECTION_SELECTORS, FOLDERLM_CLASSES, VIEW_MODES } from './utils/selectors.js';
 import { extractNoteIdFromCard, analyzePageNotes } from './utils/idParser.js';
 import { debounce, batchWithRAF, domBatchQueue } from './utils/debounce.js';
 import { storageManager } from '../storage/storageManager.js';
@@ -272,12 +272,15 @@ class FolderLM {
         );
       }
 
-      // 4. filterManager を初期化
-      this.filterManager.initialize();
+      // 4. filterManager を初期化（storageManager から viewMode を復元）
+      // 重要: storageManager.load() 完了後に復元する
+      const savedViewMode = storageManager.getViewMode();
+      this.filterManager.initialize({ viewMode: savedViewMode });
 
       // 5. domRecoveryManager を初期化
       this.domRecoveryManager.initialize();
       this._setupDOMRecoveryEvents();
+      this._setupViewModeRecoveryIntegration();
 
       // 6. UI を初期化
       this.initUI();
@@ -346,6 +349,10 @@ class FolderLM {
       } else if (event.type === 'notebooklm_filter_changed') {
         // NotebookLM 標準フィルタが変更された場合のログ
         console.log(`[FolderLM] NotebookLM filter changed to: ${event.filter}`);
+      } else if (event.type === 'viewmode_changed') {
+        // viewMode が変更された場合
+        console.log(`[FolderLM] ViewMode changed: ${event.previousViewMode} -> ${event.currentViewMode}`);
+        // TODO: Phase 5 で UI インジケーター更新を追加
       }
     });
   }
@@ -374,6 +381,11 @@ class FolderLM {
         
         // フィルタを再適用
         this.filterManager.reapplyFilter();
+
+        // viewMode を再適用（filter 以外の場合）
+        if (this.filterManager.getViewMode() !== VIEW_MODES.FILTER) {
+          this.filterManager.applyViewMode();
+        }
         
         console.log('[FolderLM] DOM recovery completed');
       });
@@ -386,6 +398,26 @@ class FolderLM {
       } else {
         console.log('[FolderLM] Tab hidden - pausing some operations');
       }
+    });
+  }
+
+  /**
+   * viewMode 復帰の統合を設定
+   * @private
+   */
+  _setupViewModeRecoveryIntegration() {
+    // domRecoveryManager に viewMode の状態チェックコールバックを登録
+    this.domRecoveryManager.setViewModeCheckCallback(() => {
+      const currentMode = this.filterManager.getViewMode();
+      
+      // filter モードの場合は復帰不要
+      if (currentMode === VIEW_MODES.FILTER) {
+        return false;
+      }
+
+      // sort/group モードの場合、並び替え状態をチェック
+      // TODO: Phase 2/3 で sort/group 実装時により詳細なチェックを追加
+      return false;
     });
   }
 
@@ -925,6 +957,7 @@ class FolderLM {
       filterManager: this.filterManager.debug(),
       domRecoveryManager: this.domRecoveryManager.debug(),
       folders: storageManager.getFolders(),
+      viewMode: this.filterManager.getViewMode(),
     };
   }
 }
