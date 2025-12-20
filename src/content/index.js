@@ -19,6 +19,7 @@ import { folderButton } from './ui/folderButton.js';
 import { folderDropdown } from './ui/folderDropdown.js';
 import { noteAssignButton } from './ui/noteAssignButton.js';
 import { folderSelectPopup } from './ui/folderSelectPopup.js';
+import { viewModeSelector } from './ui/viewModeSelector.js';
 
 /**
  * FolderLM アプリケーションクラス
@@ -47,6 +48,7 @@ class FolderLM {
     this.folderDropdown = folderDropdown;
     this.noteAssignButton = noteAssignButton;
     this.folderSelectPopup = folderSelectPopup;
+    this.viewModeSelector = viewModeSelector;
 
     // フィルタマネージャーへの参照
     this.filterManager = filterManager;
@@ -352,7 +354,13 @@ class FolderLM {
       } else if (event.type === 'viewmode_changed') {
         // viewMode が変更された場合
         console.log(`[FolderLM] ViewMode changed: ${event.previousViewMode} -> ${event.currentViewMode}`);
-        // TODO: Phase 5 で UI インジケーター更新を追加
+        // Phase 5: UI インジケーターを更新
+        this.viewModeSelector.updateIndicator();
+      } else if (event.type === 'viewmode_fallback') {
+        // viewMode がフォールバックした場合
+        console.log(`[FolderLM] ViewMode fallback: ${event.fromMode} -> ${event.toMode}`);
+        this.viewModeSelector.updateIndicator();
+        this.showWarning('グループモードを維持できないため、ソートモードに切り替えました');
       }
     });
   }
@@ -506,6 +514,30 @@ class FolderLM {
     this.folderButton.onClick(() => {
       this.toggleFolderDropdown();
     });
+
+    // Phase 5: viewMode インジケーターをフォルダボタンの隣に追加
+    this._injectViewModeIndicator();
+  }
+
+  /**
+   * viewMode インジケーターをフォルダボタンの隣に挿入
+   * @private
+   */
+  _injectViewModeIndicator() {
+    const buttonElement = this.folderButton.getElement();
+    if (!buttonElement) {
+      return;
+    }
+
+    // 既存のインジケーターがあれば削除
+    const existingIndicator = document.querySelector(`.${FOLDERLM_CLASSES.VIEW_MODE_INDICATOR}`);
+    if (existingIndicator) {
+      existingIndicator.remove();
+    }
+
+    // インジケーターを作成して挿入
+    const indicator = this.viewModeSelector.createIndicatorElement();
+    buttonElement.insertAdjacentElement('afterend', indicator);
   }
 
   /**
@@ -580,6 +612,8 @@ class FolderLM {
    */
   injectFolderButton() {
     this.folderButton.reinject();
+    // Phase 5: インジケーターも再注入
+    this._injectViewModeIndicator();
   }
 
   /**
@@ -940,6 +974,7 @@ class FolderLM {
     this.folderDropdown.destroy();
     this.noteAssignButton.destroy();
     this.folderSelectPopup.destroy();
+    this.viewModeSelector.destroy();
 
     // noteDetector, safetyManager, filterManager, domRecoveryManager をクリーンアップ
     this.noteDetector.destroy();
@@ -956,6 +991,10 @@ class FolderLM {
     document.querySelectorAll(`.${FOLDERLM_CLASSES.SELECT_POPUP}`).forEach(el => el.remove());
     document.querySelectorAll(`.${FOLDERLM_CLASSES.FOLDER_BADGE}`).forEach(el => el.remove());
     document.querySelectorAll(`.${FOLDERLM_CLASSES.FOLDER_BADGE_CONTAINER}`).forEach(el => el.remove());
+    // Phase 5: viewMode 関連要素のクリーンアップ
+    document.querySelectorAll(`.${FOLDERLM_CLASSES.VIEW_MODE_SELECTOR}`).forEach(el => el.remove());
+    document.querySelectorAll(`.${FOLDERLM_CLASSES.VIEW_MODE_INDICATOR}`).forEach(el => el.remove());
+    document.querySelectorAll(`.${FOLDERLM_CLASSES.GROUP_HEADER}`).forEach(el => el.remove());
 
     this.initialized = false;
     console.log('[FolderLM] Destroyed');

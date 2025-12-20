@@ -610,27 +610,28 @@
  * グループヘッダー
  * フォルダグループの先頭に挿入される区切り要素
  * リストセマンティクスを壊さず、非操作・非フォーカス
+ * Phase 5: 控えめなスタイルに調整
  */
 .folderlm-group-header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   width: 100%;
-  padding: 12px 16px 8px;
-  margin-top: 16px;
-  font-size: 12px;
+  padding: 10px 16px 6px;
+  margin-top: 12px;
+  font-size: 11px;
   font-weight: 500;
-  color: #5f6368;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  border-bottom: 1px solid #e8eaed;
+  color: #80868b;
+  letter-spacing: 0.3px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
   background-color: transparent;
   box-sizing: border-box;
   
-  /* 非操作・非フォーカス */
+  /* 非操作・非フォーカス - 完全にクリック不可 */
   pointer-events: none;
   user-select: none;
   -webkit-user-select: none;
+  cursor: default;
 }
 
 /* 最初のグループヘッダーはマージントップなし */
@@ -640,9 +641,10 @@
 
 /* グループヘッダーアイコン */
 .folderlm-group-header-icon {
-  font-size: 14px;
+  font-size: 12px;
   line-height: 1;
   flex-shrink: 0;
+  opacity: 0.8;
 }
 
 /* グループヘッダーラベル */
@@ -655,21 +657,22 @@
 
 /* グループヘッダーノート数 */
 .folderlm-group-header-count {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 400;
-  color: #80868b;
+  color: #9aa0a6;
   flex-shrink: 0;
+  opacity: 0.8;
 }
 
 /* ダークモード対応 */
 @media (prefers-color-scheme: dark) {
   .folderlm-group-header {
-    color: #9aa0a6;
-    border-bottom-color: #3c4043;
+    color: #80868b;
+    border-bottom-color: rgba(255, 255, 255, 0.08);
   }
 
   .folderlm-group-header-count {
-    color: #80868b;
+    color: #5f6368;
   }
 }
 
@@ -711,5 +714,191 @@
 
   .folderlm-group-header-count {
     font-size: 10px;
+  }
+}
+
+/* ==========================================================================
+   Phase 5: 表示モードセレクタ
+   ========================================================================== */
+
+/**
+ * 表示モードセレクタコンテナ
+ * フォルダドロップダウン内に配置
+ */
+.folderlm-viewmode-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-bottom: 1px solid #e8eaed;
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+.folderlm-viewmode-selector-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: #5f6368;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
+}
+
+.folderlm-viewmode-selector-buttons {
+  display: flex;
+  gap: 2px;
+  background-color: rgba(0, 0, 0, 0.04);
+  border-radius: 6px;
+  padding: 2px;
+}
+
+.folderlm-viewmode-selector-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border: none;
+  border-radius: 4px;
+  background-color: transparent;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+  color: #5f6368;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  white-space: nowrap;
+}
+
+.folderlm-viewmode-selector-button:hover {
+  background-color: rgba(0, 0, 0, 0.06);
+  color: #3c4043;
+}
+
+.folderlm-viewmode-selector-button:focus-visible {
+  outline: 2px solid #1a73e8;
+  outline-offset: 1px;
+}
+
+.folderlm-viewmode-selector-button.active {
+  background-color: #fff;
+  color: #1a73e8;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.folderlm-viewmode-selector-button.active:hover {
+  background-color: #fff;
+  color: #1558d6;
+}
+
+.folderlm-viewmode-selector-icon {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.folderlm-viewmode-selector-text {
+  font-size: 11px;
+}
+
+/* ダークモード対応 */
+@media (prefers-color-scheme: dark) {
+  .folderlm-viewmode-selector {
+    border-bottom-color: #3c4043;
+    background-color: rgba(255, 255, 255, 0.02);
+  }
+
+  .folderlm-viewmode-selector-label {
+    color: #9aa0a6;
+  }
+
+  .folderlm-viewmode-selector-buttons {
+    background-color: rgba(255, 255, 255, 0.06);
+  }
+
+  .folderlm-viewmode-selector-button {
+    color: #9aa0a6;
+  }
+
+  .folderlm-viewmode-selector-button:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+    color: #e8eaed;
+  }
+
+  .folderlm-viewmode-selector-button.active {
+    background-color: rgba(138, 180, 248, 0.2);
+    color: #8ab4f8;
+    box-shadow: none;
+  }
+
+  .folderlm-viewmode-selector-button.active:hover {
+    background-color: rgba(138, 180, 248, 0.25);
+    color: #aecbfa;
+  }
+}
+
+/* ==========================================================================
+   表示モードインジケーター
+   ========================================================================== */
+
+/**
+ * 表示モードインジケーター
+ * フォルダボタンの隣に表示される現在モードの視覚的表示
+ */
+.folderlm-viewmode-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-left: 2px;
+  font-size: 12px;
+  line-height: 1;
+  color: #5f6368;
+  border-radius: 4px;
+  background-color: rgba(0, 0, 0, 0.04);
+  transition: opacity 0.15s ease;
+}
+
+.folderlm-viewmode-indicator.hidden {
+  display: none;
+}
+
+/* ダークモード対応 */
+@media (prefers-color-scheme: dark) {
+  .folderlm-viewmode-indicator {
+    color: #9aa0a6;
+    background-color: rgba(255, 255, 255, 0.06);
+  }
+}
+
+/* ==========================================================================
+   レスポンシブ対応（Phase 5）
+   ========================================================================== */
+
+@media (max-width: 600px) {
+  .folderlm-viewmode-selector {
+    padding: 6px 12px;
+    gap: 6px;
+  }
+
+  .folderlm-viewmode-selector-label {
+    font-size: 10px;
+  }
+
+  .folderlm-viewmode-selector-button {
+    padding: 3px 6px;
+    font-size: 10px;
+    gap: 3px;
+  }
+
+  .folderlm-viewmode-selector-icon {
+    font-size: 11px;
+  }
+
+  .folderlm-viewmode-selector-text {
+    font-size: 10px;
+  }
+
+  .folderlm-viewmode-indicator {
+    width: 18px;
+    height: 18px;
+    font-size: 11px;
   }
 }
