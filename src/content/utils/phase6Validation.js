@@ -16,6 +16,7 @@ import { NOTE_SELECTORS, FOLDERLM_CLASSES, VIEW_MODES, DATA_ATTRIBUTES, FILTER_S
 import { filterManager } from '../core/filterManager.js';
 import { noteDetector } from '../core/noteDetector.js';
 import { storageManager } from '../../storage/storageManager.js';
+import { DEBUG_EXPOSE_GLOBALS, IS_EXTENSION_CONTEXT } from './debug.js';
 
 /**
  * 検証結果の型
@@ -816,7 +817,7 @@ class Phase6Validator {
 export const phase6Validator = new Phase6Validator();
 
 // グローバル公開（デバッグ用）
-if (typeof window !== 'undefined') {
+if (DEBUG_EXPOSE_GLOBALS && IS_EXTENSION_CONTEXT && typeof window !== 'undefined') {
   window.FolderLMPhase6Validator = phase6Validator;
 }
 

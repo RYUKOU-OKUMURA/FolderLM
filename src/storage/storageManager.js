@@ -14,7 +14,9 @@ import { debounce } from '../content/utils/debounce.js';
  */
 const STORAGE_KEYS = {
   FOLDERS: 'folders',
-  NOTE_ASSIGNMENTS: 'noteAssignments',
+  NOTE_ASSIGNMENTS: 'noteAssignments', // legacy (single item)
+  NOTE_ASSIGNMENTS_INDEX: 'noteAssignmentsIndex',
+  NOTE_ASSIGNMENTS_CHUNK_PREFIX: 'noteAssignmentsChunk_',
   SETTINGS: 'settings',
   VERSION: 'version',
 };
@@ -50,6 +52,10 @@ const LIMITS = {
   MAX_NOTES: 1000,
   /** chrome.storage.sync の容量上限（バイト） */
   STORAGE_QUOTA_BYTES: 102400, // 100KB
+  /** chrome.storage.sync の1アイテム上限（バイト） */
+  STORAGE_QUOTA_BYTES_PER_ITEM: 8192, // 8KB
+  /** 1アイテムの安全マージン（バイト） */
+  STORAGE_ITEM_SAFE_BYTES: 7000,
   /** 警告を出す容量閾値（80%） */
   STORAGE_WARNING_THRESHOLD: 0.8,
 };
@@ -78,6 +84,7 @@ class StorageManager {
     this.noteAssignments = {};
     this.settings = { ...DEFAULT_SETTINGS };
     this.loaded = false;
+    this._assignmentChunkCount = 0;
 
     // 保存処理をデバウンス（300ms）
     this.debouncedSave = debounce(() => this._save(), 300);
@@ -135,6 +142,7 @@ class StorageManager {
       const data = await this._getStorage([
         STORAGE_KEYS.FOLDERS,
         STORAGE_KEYS.NOTE_ASSIGNMENTS,
+        STORAGE_KEYS.NOTE_ASSIGNMENTS_INDEX,
         STORAGE_KEYS.SETTINGS,
         STORAGE_KEYS.VERSION,
       ]);
@@ -147,7 +155,8 @@ class StorageManager {
 
       // データの読み込みとバリデーション
       this.folders = this._validateFolders(data[STORAGE_KEYS.FOLDERS]);
-      this.noteAssignments = this._validateNoteAssignments(data[STORAGE_KEYS.NOTE_ASSIGNMENTS]);
+      const assignments = await this._loadNoteAssignments(data);
+      this.noteAssignments = this._validateNoteAssignments(assignments);
       this.settings = this._validateSettings(data[STORAGE_KEYS.SETTINGS]);
 
       this.loaded = true;
@@ -180,12 +189,38 @@ class StorageManager {
       // 保存前に容量チェック
       this._checkStorageUsage();
 
-      await this._setStorage({
+      const assignmentChunks = this._chunkAssignments(this.noteAssignments);
+      const chunkCount = assignmentChunks.length;
+      const totalAssignments = Object.keys(this.noteAssignments).length;
+
+      const payload = {
         [STORAGE_KEYS.FOLDERS]: this.folders,
-        [STORAGE_KEYS.NOTE_ASSIGNMENTS]: this.noteAssignments,
         [STORAGE_KEYS.SETTINGS]: this.settings,
         [STORAGE_KEYS.VERSION]: CURRENT_VERSION,
+        [STORAGE_KEYS.NOTE_ASSIGNMENTS_INDEX]: {
+          chunkCount,
+          totalAssignments,
+          updatedAt: Date.now(),
+        },
+      };
+
+      assignmentChunks.forEach((chunk, index) => {
+        payload[`${STORAGE_KEYS.NOTE_ASSIGNMENTS_CHUNK_PREFIX}${index}`] = chunk;
       });
+
+      await this._setStorage(payload);
+
+      const keysToRemove = [STORAGE_KEYS.NOTE_ASSIGNMENTS];
+      if (this._assignmentChunkCount > chunkCount) {
+        for (let i = chunkCount; i < this._assignmentChunkCount; i++) {
+          keysToRemove.push(`${STORAGE_KEYS.NOTE_ASSIGNMENTS_CHUNK_PREFIX}${i}`);
+        }
+      }
+      if (keysToRemove.length > 0) {
+        await this._removeStorage(keysToRemove);
+      }
+
+      this._assignmentChunkCount = chunkCount;
 
       console.log('[FolderLM Storage] Data saved');
 
@@ -520,6 +555,122 @@ class StorageManager {
   }
 
   /**
+   * chrome.storage.sync からデータを削除
+   * @param {string[]} keys - 削除するキー
+   * @returns {Promise<void>}
+   */
+  _removeStorage(keys) {
+    if (!Array.isArray(keys) || keys.length === 0) {
+      return Promise.resolve();
+    }
+
+    return new Promise((resolve, reject) => {
+      if (typeof chrome !== 'undefined' && chrome.storage?.sync) {
+        chrome.storage.sync.remove(keys, () => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+          } else {
+            resolve();
+          }
+        });
+      } else {
+        // 開発環境用フォールバック（localStorage）
+        console.warn('[FolderLM Storage] Using localStorage fallback');
+        for (const key of keys) {
+          localStorage.removeItem(`folderlm_${key}`);
+        }
+        resolve();
+      }
+    });
+  }
+
+  /**
+   * ノート割り当ての読み込み（分割保存対応）
+   * @param {Object} data - 読み込み済みデータ
+   * @returns {Promise<Object>} ノート割り当てオブジェクト
+   */
+  async _loadNoteAssignments(data) {
+    const index = data[STORAGE_KEYS.NOTE_ASSIGNMENTS_INDEX];
+    if (index && typeof index.chunkCount === 'number' && index.chunkCount >= 0) {
+      const chunkKeys = this._getAssignmentChunkKeys(index.chunkCount);
+      const chunkData = chunkKeys.length > 0 ? await this._getStorage(chunkKeys) : {};
+      this._assignmentChunkCount = index.chunkCount;
+      return this._mergeAssignmentChunks(chunkData, chunkKeys);
+    }
+
+    this._assignmentChunkCount = 0;
+    return data[STORAGE_KEYS.NOTE_ASSIGNMENTS];
+  }
+
+  /**
+   * ノート割り当ての分割キー一覧を生成
+   * @param {number} count
+   * @returns {string[]}
+   */
+  _getAssignmentChunkKeys(count) {
+    return Array.from({ length: count }, (_, index) =>
+      `${STORAGE_KEYS.NOTE_ASSIGNMENTS_CHUNK_PREFIX}${index}`
+    );
+  }
+
+  /**
+   * 分割された割り当てデータを結合
+   * @param {Object} chunkData
+   * @param {string[]} chunkKeys
+   * @returns {Object}
+   */
+  _mergeAssignmentChunks(chunkData, chunkKeys) {
+    const merged = {};
+    for (const key of chunkKeys) {
+      const chunk = chunkData[key];
+      if (chunk && typeof chunk === 'object') {
+        Object.assign(merged, chunk);
+      }
+    }
+    return merged;
+  }
+
+  /**
+   * ノート割り当てを1アイテム上限を考慮して分割
+   * @param {Object} assignments
+   * @returns {Array<Object>}
+   */
+  _chunkAssignments(assignments) {
+    const entries = Object.entries(assignments || {});
+    const chunks = [];
+    let current = {};
+
+    for (const [noteId, folderId] of entries) {
+      current[noteId] = folderId;
+
+      if (this._estimateBytes(current) > LIMITS.STORAGE_ITEM_SAFE_BYTES) {
+        delete current[noteId];
+
+        if (Object.keys(current).length > 0) {
+          chunks.push(current);
+        }
+
+        current = { [noteId]: folderId };
+      }
+    }
+
+    if (Object.keys(current).length > 0) {
+      chunks.push(current);
+    }
+
+    return chunks;
+  }
+
+  /**
+   * 保存サイズを概算（バイト）
+   * @param {Object} data
+   * @returns {number}
+   */
+  _estimateBytes(data) {
+    return JSON.stringify(data).length * 2;
+  }
+
+  /**
    * フォルダ名のバリデーション
    * @param {string} name - フォルダ名
    * @param {string} [excludeId] - 除外するフォルダID（リネーム時）
@@ -701,7 +852,7 @@ class StorageManager {
     };
 
     // JSON文字列の長さ×2（UTF-16）で概算
-    return JSON.stringify(data).length * 2;
+    return this._estimateBytes(data);
   }
 
   /**

@@ -9,6 +9,7 @@
 
 import { NOTE_SELECTORS, ID_PATTERNS, FOLDERLM_CLASSES } from './selectors.js';
 import { noteDetector } from '../core/noteDetector.js';
+import { DEBUG_EXPOSE_GLOBALS, IS_EXTENSION_CONTEXT } from './debug.js';
 
 /**
  * 調査結果の型定義
@@ -791,6 +792,6 @@ export default phase0Investigator;
 /**
  * グローバルに公開（DevTools からアクセス可能にする）
  */
-if (typeof window !== 'undefined') {
+if (DEBUG_EXPOSE_GLOBALS && IS_EXTENSION_CONTEXT && typeof window !== 'undefined') {
   window.FolderLMPhase0 = phase0Investigator;
 }

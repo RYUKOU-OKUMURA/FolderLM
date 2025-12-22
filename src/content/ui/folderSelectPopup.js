@@ -64,6 +64,8 @@ class FolderSelectPopup {
     this._boundHandleOutsideClick = this._handleOutsideClick.bind(this);
     this._boundHandleKeydown = this._handleKeydown.bind(this);
     this._boundHandleEscape = this._handleEscape.bind(this);
+    this._boundHandleViewportChange = this._positionPopup.bind(this);
+    this._addListenersRafId = null;
   }
 
   /**
@@ -379,14 +381,15 @@ class FolderSelectPopup {
    */
   _addGlobalListeners() {
     // 次のイベントループで追加（即座のクリックで閉じないように）
-    requestAnimationFrame(() => {
+    this._addListenersRafId = requestAnimationFrame(() => {
       document.addEventListener('click', this._boundHandleOutsideClick, true);
       document.addEventListener('keydown', this._boundHandleEscape, true);
+      this._addListenersRafId = null;
     });
 
     // スクロールや画面リサイズで位置を調整
-    window.addEventListener('resize', () => this._positionPopup());
-    window.addEventListener('scroll', () => this._positionPopup(), true);
+    window.addEventListener('resize', this._boundHandleViewportChange);
+    window.addEventListener('scroll', this._boundHandleViewportChange, true);
   }
 
   /**
@@ -394,8 +397,14 @@ class FolderSelectPopup {
    * @private
    */
   _removeGlobalListeners() {
+    if (this._addListenersRafId) {
+      cancelAnimationFrame(this._addListenersRafId);
+      this._addListenersRafId = null;
+    }
     document.removeEventListener('click', this._boundHandleOutsideClick, true);
     document.removeEventListener('keydown', this._boundHandleEscape, true);
+    window.removeEventListener('resize', this._boundHandleViewportChange);
+    window.removeEventListener('scroll', this._boundHandleViewportChange, true);
   }
 
   /**

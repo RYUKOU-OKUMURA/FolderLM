@@ -37,7 +37,25 @@
 
   "web_accessible_resources": [
     {
-      "resources": ["src/**/*.js"],
+      "resources": [
+        "src/content/index.js",
+        "src/content/core/domRecoveryManager.js",
+        "src/content/core/filterManager.js",
+        "src/content/core/noteDetector.js",
+        "src/content/core/safetyManager.js",
+        "src/content/ui/folderButton.js",
+        "src/content/ui/folderDropdown.js",
+        "src/content/ui/folderSelectPopup.js",
+        "src/content/ui/noteAssignButton.js",
+        "src/content/ui/searchBox.js",
+        "src/content/utils/debounce.js",
+        "src/content/utils/debug.js",
+        "src/content/utils/focusTrap.js",
+        "src/content/utils/icons.js",
+        "src/content/utils/idParser.js",
+        "src/content/utils/selectors.js",
+        "src/storage/storageManager.js"
+      ],
       "matches": ["https://notebooklm.google.com/*"]
     }
   ]

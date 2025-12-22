@@ -136,7 +136,7 @@ class NoteDetector {
     const newFailedCards = new Set();
 
     for (const card of cards) {
-      const noteId = this._extractNoteId(card);
+      const noteId = this._extractNoteId(card, { preferDom: true });
       
       if (noteId) {
         const resolvedCard = this._resolveCardElement(card);
@@ -220,16 +220,30 @@ class NoteDetector {
    * @param {Element} card - ノートカード要素
    * @returns {string|null}
    */
-  _extractNoteId(card) {
-    // 既にデータ属性に保存されている場合はそれを使用
+  _extractNoteId(card, options = {}) {
+    const { preferDom = false } = options;
+
+    // DOM 属性から抽出（aria-labelledby / aria-describedby など）
+    const extractedId = extractNoteIdFromCard(card);
     const existingId = card.getAttribute(DATA_ATTRIBUTES.NOTE_ID);
+
+    if (preferDom) {
+      if (extractedId && isValidUuid(extractedId)) {
+        return extractedId;
+      }
+      if (existingId && isValidUuid(existingId)) {
+        return existingId;
+      }
+      return null;
+    }
+
     if (existingId && isValidUuid(existingId)) {
       return existingId;
     }
-
-    // idParser を使用して抽出
-    const noteId = extractNoteIdFromCard(card);
-    return noteId;
+    if (extractedId && isValidUuid(extractedId)) {
+      return extractedId;
+    }
+    return null;
   }
 
   /**
@@ -411,7 +425,7 @@ class NoteDetector {
 
     // 現在のカードを処理
     for (const card of currentCards) {
-      const noteId = this._extractNoteId(card);
+      const noteId = this._extractNoteId(card, { preferDom: true });
       if (noteId) {
         const resolvedCard = this._resolveCardElement(card);
         currentIds.add(noteId);
@@ -460,7 +474,7 @@ class NoteDetector {
    * @returns {{ success: boolean, noteId?: string }}
    */
   processCard(card) {
-    const noteId = this._extractNoteId(card);
+    const noteId = this._extractNoteId(card, { preferDom: true });
     
     if (noteId) {
       const resolvedCard = this._resolveCardElement(card);

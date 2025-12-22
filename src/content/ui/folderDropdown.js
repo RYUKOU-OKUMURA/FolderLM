@@ -69,6 +69,8 @@ class FolderDropdown {
     this._boundHandleOutsideClick = this._handleOutsideClick.bind(this);
     this._boundHandleKeydown = this._handleKeydown.bind(this);
     this._boundHandleEscape = this._handleEscape.bind(this);
+    this._boundHandleViewportChange = this._positionDropdown.bind(this);
+    this._addListenersRafId = null;
   }
 
   /**
@@ -939,14 +941,15 @@ class FolderDropdown {
    */
   _addGlobalListeners() {
     // クリック外で閉じる（次のイベントループで追加）
-    requestAnimationFrame(() => {
+    this._addListenersRafId = requestAnimationFrame(() => {
       document.addEventListener('click', this._boundHandleOutsideClick, true);
       document.addEventListener('keydown', this._boundHandleEscape, true);
+      this._addListenersRafId = null;
     });
 
     // ウィンドウリサイズ時に位置を調整
-    window.addEventListener('resize', () => this._positionDropdown());
-    window.addEventListener('scroll', () => this._positionDropdown(), true);
+    window.addEventListener('resize', this._boundHandleViewportChange);
+    window.addEventListener('scroll', this._boundHandleViewportChange, true);
   }
 
   /**
@@ -954,8 +957,14 @@ class FolderDropdown {
    * @private
    */
   _removeGlobalListeners() {
+    if (this._addListenersRafId) {
+      cancelAnimationFrame(this._addListenersRafId);
+      this._addListenersRafId = null;
+    }
     document.removeEventListener('click', this._boundHandleOutsideClick, true);
     document.removeEventListener('keydown', this._boundHandleEscape, true);
+    window.removeEventListener('resize', this._boundHandleViewportChange);
+    window.removeEventListener('scroll', this._boundHandleViewportChange, true);
   }
 
   /**

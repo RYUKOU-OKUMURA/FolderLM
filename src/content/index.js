@@ -21,6 +21,7 @@ import { noteAssignButton } from './ui/noteAssignButton.js';
 import { folderSelectPopup } from './ui/folderSelectPopup.js';
 import { searchBox } from './ui/searchBox.js';
 import { createIconElement } from './utils/icons.js';
+import { DEBUG_EXPOSE_GLOBALS, IS_EXTENSION_CONTEXT } from './utils/debug.js';
 
 /**
  * FolderLM アプリケーションクラス
@@ -961,7 +962,9 @@ if (document.readyState === 'loading') {
   app.init();
 }
 
-// デバッグ用にグローバルに公開
-window.FolderLM = app;
+// デバッグ用にグローバルに公開（リリースでは無効）
+if (DEBUG_EXPOSE_GLOBALS && IS_EXTENSION_CONTEXT) {
+  window.FolderLM = app;
+}
 
 export default app;
