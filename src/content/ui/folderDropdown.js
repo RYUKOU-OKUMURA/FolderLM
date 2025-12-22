@@ -10,7 +10,6 @@
 import { FOLDERLM_CLASSES } from '../utils/selectors.js';
 import { storageManager } from '../../storage/storageManager.js';
 import { createFocusTrap } from '../utils/focusTrap.js';
-import { viewModeSelector } from './viewModeSelector.js';
 import { createIconElement } from '../utils/icons.js';
 
 /**
@@ -255,10 +254,6 @@ class FolderDropdown {
     dropdown.setAttribute('aria-label', 'フォルダ管理メニュー');
     dropdown.setAttribute('aria-orientation', 'vertical');
     dropdown.setAttribute('tabindex', '-1');
-
-    // 表示モードセレクタ（Phase 5）
-    const viewModeSelectorElement = viewModeSelector.createSelectorElement();
-    dropdown.appendChild(viewModeSelectorElement);
 
     // ヘッダー
     const header = this._createHeader();

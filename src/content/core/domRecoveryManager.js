@@ -1,20 +1,16 @@
 /**
  * FolderLM - DOM Recovery Manager
- * 
+ *
  * タブ切替や DOM 再描画後の復帰処理を管理する。
  * ページの可視性変化やDOM構造の大規模変更を検出し、UIを再初期化する。
- * 
+ *
  * @module content/core/domRecoveryManager
  */
 
-import { 
-  NOTE_SELECTORS, 
+import {
+  NOTE_SELECTORS,
   UI_INJECTION_SELECTORS,
   FOLDERLM_CLASSES,
-  VIEW_MODES,
-  DATA_ATTRIBUTES,
-  FILTER_SELECTORS,
-  findNoteListContainer
 } from '../utils/selectors.js';
 import { debounce } from '../utils/debounce.js';
 
@@ -77,30 +73,6 @@ class DOMRecoveryManager {
      * タブ表示検出のタイマーID
      */
     this._visibilityCheckTimer = null;
-
-    /**
-     * NotebookLM ソート変更の監視用 Observer
-     * @type {MutationObserver|null}
-     */
-    this._sortObserver = null;
-
-    /**
-     * 最後に検出した NotebookLM ソート状態
-     * @type {string|null}
-     */
-    this._lastSortState = null;
-
-    /**
-     * ソート変更コールバック
-     * @type {Function|null}
-     */
-    this._sortChangeCallback = null;
-
-    /**
-     * viewMode 再適用コールバック
-     * @type {Function|null}
-     */
-    this._viewModeReapplyCallback = null;
   }
 
   // ==========================================================================
@@ -125,8 +97,6 @@ class DOMRecoveryManager {
     this._setupFocusListeners();
 
     this.initialized = true;
-    // NotebookLM ソート変更の監視を開始
-    this._startObservingSortChange();
 
     console.log('[FolderLM DOMRecoveryManager] Initialized');
   }
@@ -261,6 +231,18 @@ class DOMRecoveryManager {
       return true;
     }
 
+    // 検索ボックスが存在するかチェック
+    const searchBox = document.querySelector(`.${FOLDERLM_CLASSES.SEARCH_BOX}`);
+    if (!searchBox) {
+      console.log('[FolderLM DOMRecoveryManager] Search box missing');
+      return true;
+    }
+
+    if (!searchBox.isConnected || !actionBar.contains(searchBox)) {
+      console.log('[FolderLM DOMRecoveryManager] Search box not in action bar');
+      return true;
+    }
+
     // ノートカードが存在する場合、割り当てボタンの状態をチェック
     const noteCards = document.querySelectorAll(NOTE_SELECTORS.CARD);
     if (noteCards.length > 0) {
@@ -272,204 +254,8 @@ class DOMRecoveryManager {
       }
     }
 
-    // viewMode の状態チェック（sort/group モードの場合）
-    if (this._checkViewModeRecoveryNeeded()) {
-      console.log('[FolderLM DOMRecoveryManager] ViewMode state needs recovery');
-      return true;
-    }
-
     return false;
   }
-
-  /**
-   * viewMode の復帰が必要かどうかをチェック
-   * @returns {boolean}
-   * @private
-   */
-  _checkViewModeRecoveryNeeded() {
-    // viewMode コールバックが登録されていれば、そちらに確認を委譲
-    if (this._viewModeCheckCallback) {
-      return this._viewModeCheckCallback();
-    }
-    return false;
-  }
-
-  /**
-   * viewMode 復帰チェック用のコールバックを登録
-   * filterManager から呼び出される
-   * @param {Function} callback - () => boolean
-   */
-  setViewModeCheckCallback(callback) {
-    if (typeof callback === 'function') {
-      this._viewModeCheckCallback = callback;
-    }
-  }
-
-  /**
-   * viewMode 再適用コールバックを登録
-   * filterManager から呼び出される
-   * @param {Function} callback - () => void
-   */
-  setViewModeReapplyCallback(callback) {
-    if (typeof callback === 'function') {
-      this._viewModeReapplyCallback = callback;
-    }
-  }
-
-  /**
-   * ソート変更コールバックを登録
-   * NotebookLM のソート変更時に呼び出される
-   * @param {Function} callback - () => void
-   */
-  setSortChangeCallback(callback) {
-    if (typeof callback === 'function') {
-      this._sortChangeCallback = callback;
-    }
-  }
-
-  // ==========================================================================
-  // NotebookLM ソート変更監視 (Phase 4)
-  // ==========================================================================
-
-  /**
-   * NotebookLM のソート変更を監視開始
-   * @private
-   */
-  _startObservingSortChange() {
-    // 既存の observer があれば解除
-    if (this._sortObserver) {
-      this._sortObserver.disconnect();
-      this._sortObserver = null;
-    }
-
-    // ソートボタン/ドロップダウンを探す
-    // NotebookLM はソートオプションを mat-button-toggle やドロップダウンで提供する可能性がある
-    const sortContainer = document.querySelector(
-      '[aria-label*="sort" i], [aria-label*="並べ替え"], ' +
-      '[class*="sort"], [data-sort], .mat-sort-header'
-    );
-
-    // ノートリストコンテナも監視（DOM 再構築を検知）
-    const listContainer = findNoteListContainer();
-
-    if (!sortContainer && !listContainer) {
-      console.log('[FolderLM DOMRecoveryManager] Sort container and list container not found, using body fallback');
-    }
-
-    // ノートカードの順序変更を検知するため、リストコンテナを監視
-    const targetNode = listContainer || document.body;
-
-    this._sortObserver = new MutationObserver((mutations) => {
-      this._handleSortMutations(mutations);
-    });
-
-    this._sortObserver.observe(targetNode, {
-      childList: true,    // 子ノードの追加・削除を監視
-      subtree: false,     // 直接の子のみ（パフォーマンス考慮）
-      attributes: false,  // 属性変更は不要
-    });
-
-    // 初期状態を記録
-    this._lastSortState = this._detectCurrentSortState();
-
-    console.log('[FolderLM DOMRecoveryManager] Started observing sort changes');
-  }
-
-  /**
-   * ソート変更の MutationObserver コールバック
-   * @param {MutationRecord[]} mutations
-   * @private
-   */
-  _handleSortMutations(mutations) {
-    // タブが非表示の場合はスキップ
-    if (!this.isVisible) {
-      return;
-    }
-
-    let hasSignificantChange = false;
-
-    for (const mutation of mutations) {
-      if (mutation.type === 'childList') {
-        // 複数のノートカードが追加/削除された場合はソート変更の可能性
-        const addedCards = Array.from(mutation.addedNodes).filter(
-          node => node instanceof Element && 
-            (node.matches?.(NOTE_SELECTORS.CARD) || node.querySelector?.(NOTE_SELECTORS.CARD))
-        );
-        const removedCards = Array.from(mutation.removedNodes).filter(
-          node => node instanceof Element && 
-            (node.matches?.(NOTE_SELECTORS.CARD) || node.querySelector?.(NOTE_SELECTORS.CARD))
-        );
-
-        // グループヘッダーの削除を検知（NotebookLM がリストを再構築した場合）
-        const removedHeaders = Array.from(mutation.removedNodes).filter(
-          node => node instanceof Element && 
-            node.classList?.contains(FOLDERLM_CLASSES.GROUP_HEADER)
-        );
-
-        if (removedHeaders.length > 0) {
-          console.log('[FolderLM DOMRecoveryManager] Group headers removed by DOM change');
-          hasSignificantChange = true;
-        }
-
-        // 多数のカードが同時に移動された場合はソート変更と判定
-        if (addedCards.length >= 2 || removedCards.length >= 2) {
-          hasSignificantChange = true;
-        }
-      }
-    }
-
-    if (hasSignificantChange) {
-      console.log('[FolderLM DOMRecoveryManager] Significant DOM change detected, triggering viewMode reapply');
-      this._triggerViewModeReapply();
-    }
-  }
-
-  /**
-   * 現在のソート状態を検出
-   * @returns {string|null}
-   * @private
-   */
-  _detectCurrentSortState() {
-    // ソートボタンの状態を確認
-    const activeSort = document.querySelector(
-      '[aria-sort="ascending"], [aria-sort="descending"], ' +
-      '.mat-sort-header-sorted, [data-sorted="true"]'
-    );
-
-    if (activeSort) {
-      const sortDirection = activeSort.getAttribute('aria-sort') || 'sorted';
-      const sortLabel = activeSort.getAttribute('aria-label') || activeSort.textContent?.trim() || '';
-      return `${sortLabel}:${sortDirection}`;
-    }
-
-    return null;
-  }
-
-  /**
-   * viewMode の再適用をトリガー
-   * @private
-   */
-  _triggerViewModeReapply() {
-    if (this._viewModeReapplyCallback) {
-      // デバウンスして呼び出し
-      this._debouncedReapplyViewMode();
-    }
-  }
-
-  /**
-   * デバウンスされた viewMode 再適用
-   * @private
-   */
-  _debouncedReapplyViewMode = debounce(() => {
-    if (this._viewModeReapplyCallback) {
-      console.log('[FolderLM DOMRecoveryManager] Reapplying viewMode after DOM change');
-      try {
-        this._viewModeReapplyCallback();
-      } catch (error) {
-        console.error('[FolderLM DOMRecoveryManager] viewMode reapply error:', error);
-      }
-    }
-  }, 200);
 
   // ==========================================================================
   // 復帰処理
@@ -523,7 +309,7 @@ class DOMRecoveryManager {
 
     } catch (error) {
       console.error('[FolderLM DOMRecoveryManager] Recovery failed:', error);
-      
+
       // 前の状態に戻す
       this.state = previousState;
     }
@@ -641,20 +427,9 @@ class DOMRecoveryManager {
       this._visibilityCheckTimer = null;
     }
 
-    if (this._sortObserver) {
-      this._sortObserver.disconnect();
-      this._sortObserver = null;
-    }
-
     this._debouncedRecover.cancel();
-    if (this._debouncedReapplyViewMode?.cancel) {
-      this._debouncedReapplyViewMode.cancel();
-    }
     this._recoveryCallbacks = [];
     this._visibilityListeners = [];
-    this._viewModeCheckCallback = null;
-    this._viewModeReapplyCallback = null;
-    this._sortChangeCallback = null;
     this.initialized = false;
 
     console.log('[FolderLM DOMRecoveryManager] Destroyed');
@@ -675,11 +450,6 @@ class DOMRecoveryManager {
     console.log('Last recovery:', new Date(this.lastRecoveryTime).toISOString());
     console.log('Recovery callbacks:', this._recoveryCallbacks.length);
     console.log('Visibility listeners:', this._visibilityListeners.length);
-    console.log('ViewMode check callback:', !!this._viewModeCheckCallback);
-    console.log('ViewMode reapply callback:', !!this._viewModeReapplyCallback);
-    console.log('Sort change callback:', !!this._sortChangeCallback);
-    console.log('Sort observer active:', !!this._sortObserver);
-    console.log('Last sort state:', this._lastSortState);
     console.groupEnd();
 
     return {
@@ -689,11 +459,6 @@ class DOMRecoveryManager {
       lastRecoveryTime: this.lastRecoveryTime,
       callbackCount: this._recoveryCallbacks.length,
       listenerCount: this._visibilityListeners.length,
-      hasViewModeCheckCallback: !!this._viewModeCheckCallback,
-      hasViewModeReapplyCallback: !!this._viewModeReapplyCallback,
-      hasSortChangeCallback: !!this._sortChangeCallback,
-      sortObserverActive: !!this._sortObserver,
-      lastSortState: this._lastSortState,
     };
   }
 }

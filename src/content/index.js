@@ -7,7 +7,7 @@
  * @module content/index
  */
 
-import { NOTE_SELECTORS, UI_INJECTION_SELECTORS, FOLDERLM_CLASSES, VIEW_MODES } from './utils/selectors.js';
+import { NOTE_SELECTORS, UI_INJECTION_SELECTORS, FOLDERLM_CLASSES } from './utils/selectors.js';
 import { extractNoteIdFromCard, analyzePageNotes } from './utils/idParser.js';
 import { debounce, batchWithRAF, domBatchQueue } from './utils/debounce.js';
 import { storageManager } from '../storage/storageManager.js';
@@ -19,7 +19,7 @@ import { folderButton } from './ui/folderButton.js';
 import { folderDropdown } from './ui/folderDropdown.js';
 import { noteAssignButton } from './ui/noteAssignButton.js';
 import { folderSelectPopup } from './ui/folderSelectPopup.js';
-import { viewModeSelector } from './ui/viewModeSelector.js';
+import { searchBox } from './ui/searchBox.js';
 import { createIconElement } from './utils/icons.js';
 
 /**
@@ -49,7 +49,7 @@ class FolderLM {
     this.folderDropdown = folderDropdown;
     this.noteAssignButton = noteAssignButton;
     this.folderSelectPopup = folderSelectPopup;
-    this.viewModeSelector = viewModeSelector;
+    this.searchBox = searchBox;
 
     // フィルタマネージャーへの参照
     this.filterManager = filterManager;
@@ -275,15 +275,12 @@ class FolderLM {
         );
       }
 
-      // 4. filterManager を初期化（storageManager から viewMode を復元）
-      // 重要: storageManager.load() 完了後に復元する
-      const savedViewMode = storageManager.getViewMode();
-      this.filterManager.initialize({ viewMode: savedViewMode });
+      // 4. filterManager を初期化
+      this.filterManager.initialize();
 
       // 5. domRecoveryManager を初期化
       this.domRecoveryManager.initialize();
       this._setupDOMRecoveryEvents();
-      this._setupViewModeRecoveryIntegration();
 
       // 6. UI を初期化
       this.initUI();
@@ -352,16 +349,6 @@ class FolderLM {
       } else if (event.type === 'notebooklm_filter_changed') {
         // NotebookLM 標準フィルタが変更された場合のログ
         console.log(`[FolderLM] NotebookLM filter changed to: ${event.filter}`);
-      } else if (event.type === 'viewmode_changed') {
-        // viewMode が変更された場合
-        console.log(`[FolderLM] ViewMode changed: ${event.previousViewMode} -> ${event.currentViewMode}`);
-        // Phase 5: UI インジケーターを更新
-        this.viewModeSelector.updateIndicator();
-      } else if (event.type === 'viewmode_fallback') {
-        // viewMode がフォールバックした場合
-        console.log(`[FolderLM] ViewMode fallback: ${event.fromMode} -> ${event.toMode}`);
-        this.viewModeSelector.updateIndicator();
-        this.showWarning('グループモードを維持できないため、ソートモードに切り替えました');
       }
     });
   }
@@ -391,11 +378,6 @@ class FolderLM {
         // フィルタを再適用
         this.filterManager.reapplyFilter();
 
-        // viewMode を再適用（filter 以外の場合）
-        if (this.filterManager.getViewMode() !== VIEW_MODES.FILTER) {
-          this.filterManager.applyViewMode();
-        }
-        
         console.log('[FolderLM] DOM recovery completed');
       });
     });
@@ -407,51 +389,6 @@ class FolderLM {
       } else {
         console.log('[FolderLM] Tab hidden - pausing some operations');
       }
-    });
-  }
-
-  /**
-   * viewMode 復帰の統合を設定
-   * Phase 4: DOM 変化や仮想化後の並べ替え/ヘッダー再適用を担当
-   * @private
-   */
-  _setupViewModeRecoveryIntegration() {
-    // domRecoveryManager に viewMode の状態チェックコールバックを登録
-    this.domRecoveryManager.setViewModeCheckCallback(() => {
-      return this.filterManager.checkViewModeRecoveryNeeded();
-    });
-
-    // domRecoveryManager に viewMode 再適用コールバックを登録
-    // DOM 変化（仮想化、ソート変更など）後に呼び出される
-    this.domRecoveryManager.setViewModeReapplyCallback(() => {
-      const currentMode = this.filterManager.getViewMode();
-      
-      // filter モードの場合は再適用不要
-      if (currentMode === VIEW_MODES.FILTER) {
-        return;
-      }
-
-      console.log('[FolderLM] Reapplying viewMode after DOM change');
-      
-      // 元のインデックスを再初期化（DOM が再構築された可能性があるため）
-      this.filterManager.resetOriginalIndices();
-      
-      // ノートを再スキャン
-      this.noteDetector.scanNotes().then(() => {
-        // フィルタを再適用
-        this.filterManager.reapplyFilter();
-      });
-    });
-
-    // NotebookLM ソート変更時のコールバックを登録
-    this.domRecoveryManager.setSortChangeCallback(() => {
-      console.log('[FolderLM] NotebookLM sort changed, reapplying viewMode');
-      
-      // 元のインデックスを再初期化
-      this.filterManager.resetOriginalIndices();
-      
-      // フィルタを再適用
-      this.filterManager.reapplyFilter();
     });
   }
 
@@ -485,6 +422,9 @@ class FolderLM {
     // フォルダボタンをヘッダーに挿入
     this._setupFolderButton();
 
+    // 検索ボックスをヘッダーに挿入
+    this._setupSearchBox();
+
     // フォルダドロップダウンのイベントを設定
     this._setupFolderDropdown();
 
@@ -515,30 +455,20 @@ class FolderLM {
     this.folderButton.onClick(() => {
       this.toggleFolderDropdown();
     });
-
-    // Phase 5: viewMode インジケーターをフォルダボタンの隣に追加
-    this._injectViewModeIndicator();
   }
 
   /**
-   * viewMode インジケーターをフォルダボタンの隣に挿入
+   * 検索ボックスを設定
    * @private
    */
-  _injectViewModeIndicator() {
+  _setupSearchBox() {
     const buttonElement = this.folderButton.getElement();
-    if (!buttonElement) {
-      return;
-    }
+    this.searchBox.create(buttonElement);
+    this.searchBox.setQuery(this.filterManager.getSearchQuery());
 
-    // 既存のインジケーターがあれば削除
-    const existingIndicator = document.querySelector(`.${FOLDERLM_CLASSES.VIEW_MODE_INDICATOR}`);
-    if (existingIndicator) {
-      existingIndicator.remove();
-    }
-
-    // インジケーターを作成して挿入
-    const indicator = this.viewModeSelector.createIndicatorElement();
-    buttonElement.insertAdjacentElement('afterend', indicator);
+    this.searchBox.onQueryChange((query) => {
+      this.filterManager.setSearchQuery(query);
+    });
   }
 
   /**
@@ -613,8 +543,8 @@ class FolderLM {
    */
   injectFolderButton() {
     this.folderButton.reinject();
-    // Phase 5: インジケーターも再注入
-    this._injectViewModeIndicator();
+    this.searchBox.reinject(this.folderButton.getElement());
+    this.searchBox.setQuery(this.filterManager.getSearchQuery());
   }
 
   /**
@@ -971,9 +901,9 @@ class FolderLM {
     // UI コンポーネントをクリーンアップ
     this.folderButton.destroy();
     this.folderDropdown.destroy();
+    this.searchBox.destroy();
     this.noteAssignButton.destroy();
     this.folderSelectPopup.destroy();
-    this.viewModeSelector.destroy();
 
     // noteDetector, safetyManager, filterManager, domRecoveryManager をクリーンアップ
     this.noteDetector.destroy();
@@ -986,14 +916,11 @@ class FolderLM {
     // 追加した要素を削除
     document.querySelectorAll(`.${FOLDERLM_CLASSES.FOLDER_BUTTON}`).forEach(el => el.remove());
     document.querySelectorAll(`.${FOLDERLM_CLASSES.FOLDER_DROPDOWN}`).forEach(el => el.remove());
+    document.querySelectorAll(`.${FOLDERLM_CLASSES.SEARCH_BOX}`).forEach(el => el.remove());
     document.querySelectorAll(`.${FOLDERLM_CLASSES.ASSIGN_BUTTON}`).forEach(el => el.remove());
     document.querySelectorAll(`.${FOLDERLM_CLASSES.SELECT_POPUP}`).forEach(el => el.remove());
     document.querySelectorAll(`.${FOLDERLM_CLASSES.FOLDER_BADGE}`).forEach(el => el.remove());
     document.querySelectorAll(`.${FOLDERLM_CLASSES.FOLDER_BADGE_CONTAINER}`).forEach(el => el.remove());
-    // Phase 5: viewMode 関連要素のクリーンアップ
-    document.querySelectorAll(`.${FOLDERLM_CLASSES.VIEW_MODE_SELECTOR}`).forEach(el => el.remove());
-    document.querySelectorAll(`.${FOLDERLM_CLASSES.VIEW_MODE_INDICATOR}`).forEach(el => el.remove());
-    document.querySelectorAll(`.${FOLDERLM_CLASSES.GROUP_HEADER}`).forEach(el => el.remove());
 
     this.initialized = false;
     console.log('[FolderLM] Destroyed');
@@ -1020,7 +947,6 @@ class FolderLM {
       filterManager: this.filterManager.debug(),
       domRecoveryManager: this.domRecoveryManager.debug(),
       folders: storageManager.getFolders(),
-      viewMode: this.filterManager.getViewMode(),
     };
   }
 }

@@ -8,7 +8,6 @@
  */
 
 import { debounce } from '../content/utils/debounce.js';
-import { VIEW_MODES } from '../content/utils/selectors.js';
 
 /**
  * ストレージのキー名
@@ -68,10 +67,7 @@ const ERROR_TYPES = {
 /**
  * デフォルト設定
  */
-const DEFAULT_SETTINGS = {
-  /** 表示モード（filter/sort/group） */
-  viewMode: VIEW_MODES.FILTER,
-};
+const DEFAULT_SETTINGS = {};
 
 /**
  * Storage Manager クラス
@@ -618,18 +614,11 @@ class StorageManager {
    * @returns {Object} バリデーション済み設定オブジェクト
    */
   _validateSettings(settings) {
-    const validatedSettings = { ...DEFAULT_SETTINGS };
-
     if (!settings || typeof settings !== 'object') {
-      return validatedSettings;
+      return { ...DEFAULT_SETTINGS };
     }
 
-    // viewMode のバリデーション
-    if (settings.viewMode && Object.values(VIEW_MODES).includes(settings.viewMode)) {
-      validatedSettings.viewMode = settings.viewMode;
-    }
-
-    return validatedSettings;
+    return { ...DEFAULT_SETTINGS };
   }
 
   /**
@@ -840,40 +829,6 @@ class StorageManager {
    */
   get ERROR_TYPES() {
     return { ...ERROR_TYPES };
-  }
-
-  // ==========================================================================
-  // viewMode 操作
-  // ==========================================================================
-
-  /**
-   * 現在の viewMode を取得
-   * @returns {string} 'filter' | 'sort' | 'group'
-   */
-  getViewMode() {
-    return this.settings.viewMode || VIEW_MODES.FILTER;
-  }
-
-  /**
-   * viewMode を設定
-   * @param {string} mode - 'filter' | 'sort' | 'group'
-   * @returns {{ success: boolean, error?: string }}
-   */
-  setViewMode(mode) {
-    if (!Object.values(VIEW_MODES).includes(mode)) {
-      return { success: false, error: `Invalid viewMode: ${mode}` };
-    }
-
-    const previousMode = this.settings.viewMode;
-    if (previousMode === mode) {
-      return { success: true };
-    }
-
-    this.settings.viewMode = mode;
-    this.save();
-
-    console.log(`[FolderLM Storage] viewMode changed: ${previousMode} -> ${mode}`);
-    return { success: true };
   }
 
   /**

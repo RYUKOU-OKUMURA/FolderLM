@@ -164,6 +164,21 @@ export const FOLDERLM_CLASSES = {
   FOLDER_BADGE_CONTAINER_ICON: 'folderlm-folder-badge-container--icon',
 
   /**
+   * 検索ボックスのコンテナ
+   */
+  SEARCH_BOX: 'folderlm-search-box',
+
+  /**
+   * 検索入力
+   */
+  SEARCH_INPUT: 'folderlm-search-input',
+
+  /**
+   * 検索クリアボタン
+   */
+  SEARCH_CLEAR: 'folderlm-search-clear',
+
+  /**
    * 非表示状態（フィルタで除外されたノート）
    */
   HIDDEN: 'folderlm-hidden',
@@ -174,53 +189,8 @@ export const FOLDERLM_CLASSES = {
   INITIALIZED: 'folderlm-initialized',
 
   // ==========================================================================
-  // Phase 0: グループヘッダー・並べ替え関連のクラス（フォルダ分け計画より）
+  // Phase 0: グループヘッダー・並べ替え関連のクラス（削除済み）
   // ==========================================================================
-
-  /**
-   * グループヘッダー要素
-   * フォルダグループの先頭に挿入される区切り要素
-   */
-  GROUP_HEADER: 'folderlm-group-header',
-
-  /**
-   * グループヘッダーのラベル部分
-   */
-  GROUP_HEADER_LABEL: 'folderlm-group-header-label',
-
-  /**
-   * グループヘッダーのアイコン部分
-   */
-  GROUP_HEADER_ICON: 'folderlm-group-header-icon',
-
-  /**
-   * ソートモードで並べ替え済みのカード
-   */
-  SORTED: 'folderlm-sorted',
-
-  /**
-   * グループモードでグループ化済みのカード
-   */
-  GROUPED: 'folderlm-grouped',
-
-  /**
-   * 元の DOM 順序インデックスを保持するためのクラス
-   */
-  HAS_ORIGINAL_INDEX: 'folderlm-has-original-index',
-
-  // ==========================================================================
-  // Phase 5: viewMode セレクタ UI 関連のクラス
-  // ==========================================================================
-
-  /**
-   * 表示モードセレクタのコンテナ
-   */
-  VIEW_MODE_SELECTOR: 'folderlm-viewmode-selector',
-
-  /**
-   * 表示モードのインジケーター（フォルダボタン付近に表示）
-   */
-  VIEW_MODE_INDICATOR: 'folderlm-viewmode-indicator',
 };
 
 /**
@@ -243,48 +213,18 @@ export const DATA_ATTRIBUTES = {
   INITIALIZED: 'data-folderlm-initialized',
 
   // ==========================================================================
-  // Phase 0: 並べ替え関連のデータ属性（フォルダ分け計画より）
+  // Phase 0: 並べ替え関連のデータ属性（削除済み）
   // ==========================================================================
-
-  /**
-   * 元の DOM 順序インデックス
-   * スキャン時の元の位置を記録し、安定ソートに使用
-   */
-  ORIGINAL_INDEX: 'data-folderlm-original-index',
-
-  /**
-   * CSS order の値
-   * flex/grid コンテナで使用
-   */
-  ORDER: 'data-folderlm-order',
-
-  /**
-   * グループヘッダーのフォルダID
-   */
-  GROUP_FOLDER_ID: 'data-folderlm-group-folder-id',
 };
 
 /**
- * 表示モード定義（フォルダ分け計画より）
+ * 表示モード定義（互換用）
  */
 export const VIEW_MODES = {
   /**
    * フィルタモード: 非該当ノートを非表示（並べ替えなし）
-   * 現行と同様の動作
    */
   FILTER: 'filter',
-
-  /**
-   * ソートモード: フォルダ順に並べ替え、ヘッダーなし
-   * MVP として優先実装
-   */
-  SORT: 'sort',
-
-  /**
-   * グループモード: フォルダ順に並べ替え + グループヘッダー表示
-   * 「すべて」選択時のみ有効
-   */
-  GROUP: 'group',
 };
 
 /**
