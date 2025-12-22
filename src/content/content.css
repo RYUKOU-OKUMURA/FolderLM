@@ -108,6 +108,7 @@
   align-items: center;
   margin-left: 8px;
   position: relative;
+  z-index: 1;
 }
 
 .folderlm-search-input {
@@ -128,7 +129,7 @@
 
 .folderlm-search-input:focus {
   border-color: #1a73e8;
-  box-shadow: 0 0 0 1px rgba(26, 115, 232, 0.2);
+  box-shadow: inset 0 0 0 1px rgba(26, 115, 232, 0.2);
 }
 
 .folderlm-search-clear {
@@ -173,7 +174,7 @@
 
   .folderlm-search-input:focus {
     border-color: #8ab4f8;
-    box-shadow: 0 0 0 1px rgba(138, 180, 248, 0.2);
+    box-shadow: inset 0 0 0 1px rgba(138, 180, 248, 0.2);
   }
 
   .folderlm-search-input::placeholder {
