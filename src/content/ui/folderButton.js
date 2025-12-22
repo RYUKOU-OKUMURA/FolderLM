@@ -9,6 +9,7 @@
 
 import { UI_INJECTION_SELECTORS, FOLDERLM_CLASSES } from '../utils/selectors.js';
 import { findFirstMatch } from '../utils/selectors.js';
+import { createIconElement } from '../utils/icons.js';
 
 /**
  * フォルダボタンコンポーネント
@@ -67,9 +68,7 @@ class FolderButton {
     button.title = 'FolderLM - フォルダ管理';
 
     // アイコンを設定
-    const icon = document.createElement('span');
-    icon.textContent = '📂';
-    icon.setAttribute('aria-hidden', 'true');
+    const icon = createIconElement('folder', 20);
     button.appendChild(icon);
 
     // スクリーンリーダー用のテキスト

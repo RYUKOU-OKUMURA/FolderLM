@@ -9,6 +9,7 @@
 
 import { FOLDERLM_CLASSES } from '../utils/selectors.js';
 import { storageManager } from '../../storage/storageManager.js';
+import { createIconElement } from '../utils/icons.js';
 
 /**
  * NoteAssignButton クラス
@@ -98,10 +99,8 @@ class NoteAssignButton {
     button.setAttribute('tabindex', '0');
 
     // アイコン
-    const icon = document.createElement('span');
-    icon.className = 'folderlm-assign-button__icon';
-    icon.textContent = '📂';
-    icon.setAttribute('aria-hidden', 'true');
+    const icon = createIconElement('folder', 16);
+    icon.classList.add('folderlm-assign-button__icon');
     button.appendChild(icon);
 
     // クリックイベント

@@ -11,6 +11,7 @@ import { FOLDERLM_CLASSES } from '../utils/selectors.js';
 import { storageManager } from '../../storage/storageManager.js';
 import { createFocusTrap } from '../utils/focusTrap.js';
 import { viewModeSelector } from './viewModeSelector.js';
+import { createIconElement } from '../utils/icons.js';
 
 /**
  * ドロップダウンの状態
@@ -52,6 +53,18 @@ class FolderDropdown {
 
     /** @type {FocusTrap|null} フォーカストラップインスタンス */
     this._focusTrap = null;
+
+    /** @type {Function|null} フォルダ名変更時のコールバック */
+    this._onFolderRename = null;
+
+    /** @type {Function|null} フォルダ削除時のコールバック */
+    this._onFolderDelete = null;
+
+    /** @type {Function|null} フォルダ並び替え時のコールバック */
+    this._onFolderReorder = null;
+
+    /** @type {string|null} ドラッグ中のフォルダID */
+    this._draggedFolderId = null;
 
     // バインドされたイベントハンドラ
     this._boundHandleOutsideClick = this._handleOutsideClick.bind(this);
@@ -186,6 +199,30 @@ class FolderDropdown {
   }
 
   /**
+   * フォルダ名変更時のコールバックを設定
+   * @param {Function} callback - (folderId: string, newName: string) => void
+   */
+  onFolderRename(callback) {
+    this._onFolderRename = callback;
+  }
+
+  /**
+   * フォルダ削除時のコールバックを設定
+   * @param {Function} callback - (folderId: string) => void
+   */
+  onFolderDelete(callback) {
+    this._onFolderDelete = callback;
+  }
+
+  /**
+   * フォルダ並び替え時のコールバックを設定
+   * @param {Function} callback - (folderIds: string[]) => void
+   */
+  onFolderReorder(callback) {
+    this._onFolderReorder = callback;
+  }
+
+  /**
    * ドロップダウンを破棄
    */
   destroy() {
@@ -193,6 +230,9 @@ class FolderDropdown {
     this._onFolderSelect = null;
     this._onFolderCreate = null;
     this._onClose = null;
+    this._onFolderRename = null;
+    this._onFolderDelete = null;
+    this._onFolderReorder = null;
   }
 
   // ==========================================================================
@@ -323,11 +363,15 @@ class FolderDropdown {
       item.setAttribute('aria-current', 'true');
     }
 
+    // ドラッグハンドル（デフォルトフォルダ以外）
+    const dragHandle = createIconElement('drag', 12);
+    dragHandle.classList.add('folderlm-folder-item-drag-handle');
+    item.appendChild(dragHandle);
+
     // アイコン
-    const icon = document.createElement('span');
-    icon.className = 'folderlm-folder-item-icon';
-    icon.textContent = folder.isDefault ? '📥' : '📂';
-    icon.setAttribute('aria-hidden', 'true');
+    const iconType = folder.isDefault ? 'inbox' : 'folder';
+    const icon = createIconElement(iconType, 16);
+    icon.classList.add('folderlm-folder-item-icon');
     item.appendChild(icon);
 
     // フォルダ名
@@ -343,13 +387,297 @@ class FolderDropdown {
     count.setAttribute('aria-label', `${noteCount}件のノート`);
     item.appendChild(count);
 
-    // クリックイベント
+    // アクションボタン（編集・削除）- デフォルトフォルダ以外
+    if (!folder.isDefault) {
+      const actions = this._createFolderActions(folder);
+      item.appendChild(actions);
+    }
+
+    // クリックイベント（アイテム全体）
     item.addEventListener('click', (e) => {
+      // アクションボタンクリックは無視
+      if (e.target.closest('.folderlm-folder-item-actions')) {
+        return;
+      }
       e.stopPropagation();
       this._handleFolderClick(folder.id);
     });
 
+    // ドラッグ&ドロップを設定
+    this._setupDragAndDrop(item, folder, index);
+
     return item;
+  }
+
+  /**
+   * フォルダアクションボタンを作成（編集・削除）
+   * @param {Object} folder - フォルダオブジェクト
+   * @returns {HTMLElement}
+   * @private
+   */
+  _createFolderActions(folder) {
+    const actions = document.createElement('span');
+    actions.className = 'folderlm-folder-item-actions';
+
+    // 編集ボタン
+    const editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.className = 'folderlm-folder-item-edit';
+    editBtn.setAttribute('aria-label', 'フォルダ名を編集');
+    editBtn.setAttribute('title', '編集');
+    editBtn.appendChild(createIconElement('edit', 14));
+    editBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._startEditing(folder.id);
+    });
+    actions.appendChild(editBtn);
+
+    // 削除ボタン
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'folderlm-folder-item-delete';
+    deleteBtn.setAttribute('aria-label', 'フォルダを削除');
+    deleteBtn.setAttribute('title', '削除');
+    deleteBtn.appendChild(createIconElement('delete', 14));
+    deleteBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._confirmDelete(folder.id);
+    });
+    actions.appendChild(deleteBtn);
+
+    return actions;
+  }
+
+  /**
+   * フォルダ編集モードを開始
+   * @param {string} folderId - フォルダID
+   * @private
+   */
+  _startEditing(folderId) {
+    const folder = storageManager.getFolder(folderId);
+    if (!folder) return;
+
+    const item = this.element?.querySelector(`[data-folder-id="${folderId}"]`);
+    if (!item) return;
+
+    // 元のコンテンツを保存
+    const originalHTML = item.innerHTML;
+    item.classList.add('editing');
+    item.innerHTML = '';
+
+    // 編集フォーム
+    const form = document.createElement('form');
+    form.className = 'folderlm-folder-edit-form';
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = folder.name;
+    input.className = 'folderlm-folder-edit-input';
+    input.maxLength = storageManager.LIMITS.MAX_FOLDER_NAME_LENGTH;
+    input.setAttribute('aria-label', 'フォルダ名');
+    form.appendChild(input);
+
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'submit';
+    saveBtn.className = 'folderlm-folder-edit-save';
+    saveBtn.textContent = '✓';
+    saveBtn.setAttribute('aria-label', '保存');
+    form.appendChild(saveBtn);
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'folderlm-folder-edit-cancel';
+    cancelBtn.textContent = '✕';
+    cancelBtn.setAttribute('aria-label', 'キャンセル');
+    form.appendChild(cancelBtn);
+
+    // エラー表示
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'folderlm-folder-edit-error';
+    errorDiv.style.display = 'none';
+
+    item.appendChild(form);
+    item.appendChild(errorDiv);
+
+    // イベント設定
+    const restoreItem = () => {
+      item.innerHTML = originalHTML;
+      item.classList.remove('editing');
+    };
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const newName = input.value.trim();
+      const result = storageManager.renameFolder(folderId, newName);
+      if (result.success) {
+        this._render();
+        this._positionDropdown();
+        if (this._onFolderRename) {
+          this._onFolderRename(folderId, newName);
+        }
+      } else {
+        errorDiv.textContent = result.error;
+        errorDiv.style.display = 'block';
+      }
+    });
+
+    cancelBtn.addEventListener('click', restoreItem);
+
+    input.addEventListener('keydown', (e) => {
+      if (e.isComposing || e.keyCode === 229) return;
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        restoreItem();
+      }
+    });
+
+    input.focus();
+    input.select();
+  }
+
+  /**
+   * フォルダ削除の確認
+   * @param {string} folderId - フォルダID
+   * @private
+   */
+  _confirmDelete(folderId) {
+    const folder = storageManager.getFolder(folderId);
+    if (!folder) return;
+
+    const noteCount = storageManager.getNotesByFolder(folderId).length;
+    const message = noteCount > 0
+      ? `「${folder.name}」を削除しますか？\n${noteCount}件のノートは「未分類」に移動されます。`
+      : `「${folder.name}」を削除しますか？`;
+
+    if (confirm(message)) {
+      const result = storageManager.deleteFolder(folderId);
+      if (result.success) {
+        this._render();
+        this._positionDropdown();
+        if (this._onFolderDelete) {
+          this._onFolderDelete(folderId);
+        }
+      }
+    }
+  }
+
+  /**
+   * ドラッグ&ドロップを設定
+   * @param {HTMLElement} item - フォルダアイテム要素
+   * @param {Object} folder - フォルダオブジェクト
+   * @param {number} index - インデックス
+   * @private
+   */
+  _setupDragAndDrop(item, folder, index) {
+    // デフォルトフォルダはドラッグ不可
+    if (folder.isDefault) {
+      item.setAttribute('draggable', 'false');
+      return;
+    }
+
+    item.setAttribute('draggable', 'true');
+
+    // dragstart
+    item.addEventListener('dragstart', (e) => {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', folder.id);
+      item.classList.add('dragging');
+      this._draggedFolderId = folder.id;
+    });
+
+    // dragend
+    item.addEventListener('dragend', () => {
+      item.classList.remove('dragging');
+      this._draggedFolderId = null;
+      // ドロップインジケーターを削除
+      this.element?.querySelectorAll('.drop-above, .drop-below').forEach(el => {
+        el.classList.remove('drop-above', 'drop-below');
+      });
+    });
+
+    // dragover
+    item.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+
+      // 自分自身やデフォルトフォルダにはドロップ不可
+      const targetFolderId = item.getAttribute('data-folder-id');
+      if (targetFolderId === this._draggedFolderId) return;
+      if (targetFolderId === storageManager.UNCATEGORIZED_ID) return;
+
+      // ドロップ位置のインジケーター表示
+      const rect = item.getBoundingClientRect();
+      const midpoint = rect.top + rect.height / 2;
+
+      item.classList.remove('drop-above', 'drop-below');
+      if (e.clientY < midpoint) {
+        item.classList.add('drop-above');
+      } else {
+        item.classList.add('drop-below');
+      }
+    });
+
+    // dragleave
+    item.addEventListener('dragleave', () => {
+      item.classList.remove('drop-above', 'drop-below');
+    });
+
+    // drop
+    item.addEventListener('drop', (e) => {
+      e.preventDefault();
+      item.classList.remove('drop-above', 'drop-below');
+
+      const draggedId = e.dataTransfer.getData('text/plain');
+      const targetId = item.getAttribute('data-folder-id');
+
+      // デフォルトフォルダにはドロップ不可
+      if (targetId === storageManager.UNCATEGORIZED_ID) return;
+      if (draggedId === targetId) return;
+
+      this._handleDrop(draggedId, targetId, e.clientY < item.getBoundingClientRect().top + item.offsetHeight / 2);
+    });
+  }
+
+  /**
+   * ドロップを処理
+   * @param {string} draggedId - ドラッグしたフォルダID
+   * @param {string} targetId - ドロップ先フォルダID
+   * @param {boolean} insertBefore - ターゲットの前に挿入するか
+   * @private
+   */
+  _handleDrop(draggedId, targetId, insertBefore) {
+    const folders = storageManager.getFolders();
+    const draggedIndex = folders.findIndex(f => f.id === draggedId);
+    const targetIndex = folders.findIndex(f => f.id === targetId);
+
+    if (draggedIndex === -1 || targetIndex === -1) return;
+
+    // 新しい順序を計算
+    const newFolderIds = folders.map(f => f.id);
+    newFolderIds.splice(draggedIndex, 1);
+
+    let insertIndex = targetIndex;
+    if (draggedIndex < targetIndex) {
+      insertIndex--;
+    }
+    if (!insertBefore) {
+      insertIndex++;
+    }
+
+    // デフォルトフォルダの位置（0）より前には挿入しない
+    insertIndex = Math.max(1, insertIndex);
+
+    newFolderIds.splice(insertIndex, 0, draggedId);
+
+    // ストレージに保存
+    const result = storageManager.reorderFolders(newFolderIds);
+    if (result.success) {
+      this._render();
+      this._positionDropdown();
+      if (this._onFolderReorder) {
+        this._onFolderReorder(newFolderIds);
+      }
+    }
   }
 
   /**

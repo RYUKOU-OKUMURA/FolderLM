@@ -20,6 +20,7 @@ import { folderDropdown } from './ui/folderDropdown.js';
 import { noteAssignButton } from './ui/noteAssignButton.js';
 import { folderSelectPopup } from './ui/folderSelectPopup.js';
 import { viewModeSelector } from './ui/viewModeSelector.js';
+import { createIconElement } from './utils/icons.js';
 
 /**
  * FolderLM アプリケーションクラス
@@ -749,10 +750,8 @@ class FolderLM {
     badge.className = FOLDERLM_CLASSES.FOLDER_BADGE;
     badge.setAttribute('title', `フォルダ: ${folder.name}`);
 
-    const icon = document.createElement('span');
-    icon.className = 'folderlm-folder-badge-icon';
-    icon.textContent = '📂';
-    icon.setAttribute('aria-hidden', 'true');
+    const icon = createIconElement('folder', 10);
+    icon.classList.add('folderlm-folder-badge-icon');
     badge.appendChild(icon);
 
     const name = document.createElement('span');

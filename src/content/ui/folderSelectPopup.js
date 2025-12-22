@@ -10,6 +10,7 @@
 import { FOLDERLM_CLASSES } from '../utils/selectors.js';
 import { storageManager } from '../../storage/storageManager.js';
 import { createFocusTrap } from '../utils/focusTrap.js';
+import { createIconElement } from '../utils/icons.js';
 
 /**
  * FolderSelectPopup クラス
@@ -274,11 +275,9 @@ class FolderSelectPopup {
     item.appendChild(check);
 
     // アイコン
-    const icon = document.createElement('span');
-    icon.className = 'folderlm-select-popup-item-icon';
-    icon.textContent = folder.isDefault ? '📥' : '📂';
-    icon.setAttribute('aria-hidden', 'true');
-    icon.style.marginRight = '8px';
+    const iconType = folder.isDefault ? 'inbox' : 'folder';
+    const icon = createIconElement(iconType, 14);
+    icon.classList.add('folderlm-select-popup-item-icon');
     item.appendChild(icon);
 
     // フォルダ名

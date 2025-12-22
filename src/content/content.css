@@ -902,3 +902,310 @@
     font-size: 11px;
   }
 }
+
+/* ==========================================================================
+   SVGアイコン共通スタイル
+   ========================================================================== */
+
+/**
+ * アイコンラッパー
+ * インラインSVGを含むspan要素
+ */
+.folderlm-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.folderlm-icon svg {
+  display: block;
+}
+
+/* アイコンのデフォルトカラー */
+.folderlm-svg-icon {
+  color: #1a73e8;
+}
+
+/* ダークモードのアイコンカラー */
+@media (prefers-color-scheme: dark) {
+  .folderlm-svg-icon {
+    color: #8ab4f8;
+  }
+}
+
+/* ==========================================================================
+   フォルダアイテム アクションボタン（編集・削除）
+   ========================================================================== */
+
+.folderlm-folder-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.folderlm-folder-item-edit,
+.folderlm-folder-item-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background-color: transparent;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  color: #5f6368;
+}
+
+.folderlm-folder-item-edit:hover {
+  background-color: rgba(26, 115, 232, 0.1);
+  color: #1a73e8;
+}
+
+.folderlm-folder-item-delete:hover {
+  background-color: rgba(217, 48, 37, 0.1);
+  color: #d93025;
+}
+
+.folderlm-folder-item-edit:focus-visible,
+.folderlm-folder-item-delete:focus-visible {
+  outline: 2px solid #1a73e8;
+  outline-offset: 1px;
+}
+
+/* ダークモード */
+@media (prefers-color-scheme: dark) {
+  .folderlm-folder-item-edit,
+  .folderlm-folder-item-delete {
+    color: #9aa0a6;
+  }
+
+  .folderlm-folder-item-edit:hover {
+    background-color: rgba(138, 180, 248, 0.15);
+    color: #8ab4f8;
+  }
+
+  .folderlm-folder-item-delete:hover {
+    background-color: rgba(242, 139, 130, 0.15);
+    color: #f28b82;
+  }
+}
+
+/* ==========================================================================
+   フォルダアイテム インライン編集モード
+   ========================================================================== */
+
+.folderlm-folder-item.editing {
+  padding: 6px 16px;
+}
+
+.folderlm-folder-edit-form {
+  display: flex;
+  width: 100%;
+  gap: 4px;
+  align-items: center;
+}
+
+.folderlm-folder-edit-input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid #dadce0;
+  border-radius: 4px;
+  font-size: 14px;
+  outline: none;
+  background-color: #fff;
+  color: #202124;
+}
+
+.folderlm-folder-edit-input:focus {
+  border-color: #1a73e8;
+  box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.2);
+}
+
+.folderlm-folder-edit-save,
+.folderlm-folder-edit-cancel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.15s ease;
+}
+
+.folderlm-folder-edit-save {
+  background-color: #1a73e8;
+  color: #fff;
+}
+
+.folderlm-folder-edit-save:hover {
+  background-color: #1558d6;
+}
+
+.folderlm-folder-edit-cancel {
+  background-color: transparent;
+  color: #5f6368;
+}
+
+.folderlm-folder-edit-cancel:hover {
+  background-color: rgba(0, 0, 0, 0.06);
+}
+
+.folderlm-folder-edit-error {
+  width: 100%;
+  margin-top: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: #d93025;
+  background-color: rgba(217, 48, 37, 0.08);
+  border-radius: 4px;
+}
+
+/* ダークモード */
+@media (prefers-color-scheme: dark) {
+  .folderlm-folder-edit-input {
+    background-color: #202124;
+    border-color: #5f6368;
+    color: #e8eaed;
+  }
+
+  .folderlm-folder-edit-input:focus {
+    border-color: #8ab4f8;
+    box-shadow: 0 0 0 2px rgba(138, 180, 248, 0.2);
+  }
+
+  .folderlm-folder-edit-save {
+    background-color: #8ab4f8;
+    color: #202124;
+  }
+
+  .folderlm-folder-edit-save:hover {
+    background-color: #aecbfa;
+  }
+
+  .folderlm-folder-edit-cancel {
+    color: #9aa0a6;
+  }
+
+  .folderlm-folder-edit-cancel:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .folderlm-folder-edit-error {
+    color: #f28b82;
+    background-color: rgba(242, 139, 130, 0.12);
+  }
+}
+
+/* ==========================================================================
+   ドラッグ&ドロップ 並び替え
+   ========================================================================== */
+
+.folderlm-folder-item-drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 24px;
+  margin-right: 8px;
+  color: #9aa0a6;
+  cursor: grab;
+  flex-shrink: 0;
+  opacity: 0.6;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.folderlm-folder-item-drag-handle:hover {
+  opacity: 1;
+  color: #5f6368;
+}
+
+.folderlm-folder-item[draggable="true"]:hover .folderlm-folder-item-drag-handle {
+  opacity: 1;
+}
+
+/* ドラッグ中の状態 */
+.folderlm-folder-item.dragging {
+  opacity: 0.5;
+  background-color: rgba(26, 115, 232, 0.08);
+}
+
+.folderlm-folder-item.dragging .folderlm-folder-item-drag-handle {
+  cursor: grabbing;
+}
+
+/* ドロップインジケーター */
+.folderlm-folder-item.drop-above {
+  box-shadow: inset 0 2px 0 0 #1a73e8;
+}
+
+.folderlm-folder-item.drop-below {
+  box-shadow: inset 0 -2px 0 0 #1a73e8;
+}
+
+/* デフォルトフォルダ（未分類）はドラッグ不可 */
+.folderlm-folder-item[draggable="false"] .folderlm-folder-item-drag-handle {
+  visibility: hidden;
+}
+
+/* ダークモード */
+@media (prefers-color-scheme: dark) {
+  .folderlm-folder-item-drag-handle {
+    color: #5f6368;
+  }
+
+  .folderlm-folder-item-drag-handle:hover {
+    color: #9aa0a6;
+  }
+
+  .folderlm-folder-item.dragging {
+    background-color: rgba(138, 180, 248, 0.12);
+  }
+
+  .folderlm-folder-item.drop-above {
+    box-shadow: inset 0 2px 0 0 #8ab4f8;
+  }
+
+  .folderlm-folder-item.drop-below {
+    box-shadow: inset 0 -2px 0 0 #8ab4f8;
+  }
+}
+
+/* ==========================================================================
+   レスポンシブ対応（アクション・D&D）
+   ========================================================================== */
+
+@media (max-width: 600px) {
+  .folderlm-folder-item-edit,
+  .folderlm-folder-item-delete {
+    width: 32px;
+    height: 32px;
+  }
+
+  .folderlm-folder-item-drag-handle {
+    width: 14px;
+    margin-right: 6px;
+  }
+
+  .folderlm-folder-edit-input {
+    padding: 8px;
+    font-size: 16px; /* モバイルでのズーム防止 */
+  }
+
+  .folderlm-folder-edit-save,
+  .folderlm-folder-edit-cancel {
+    width: 32px;
+    height: 32px;
+  }
+}
