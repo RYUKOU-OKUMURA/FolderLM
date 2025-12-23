@@ -1,8 +1,8 @@
 # MVP実装計画
 
 ## 0. 事前確認（完了済み）
-- [x] 要件定義書の清書（`要件定義書_清書.md`）
-- [x] アーキテクチャ清書（`アーキテクチャ清書.md`）
+- [x] 要件定義書の清書（`docs/要件定義書_清書.md`）
+- [x] アーキテクチャ清書（`docs/アーキテクチャ清書.md`）
 - [x] ノートIDの安定取得を検証（`aria-labelledby` から UUID を抽出可能）
 
 ---
@@ -18,12 +18,12 @@
 - `src/content/utils/selectors.js` - セレクタ定義
 - `src/content/utils/idParser.js` - ノートID抽出ロジック
 - `src/content/utils/debounce.js` - デバウンス/バッチ処理ユーティリティ
-- `docs/DOM調査結果.md` - 調査結果ドキュメント
+- `docs/research/DOM調査結果.md` - 調査結果ドキュメント
 
 ---
 
 ## 2. プロジェクト初期構成
-- [x] `manifest.json` を作成（MV3、storage 権限、host 権限）
+- [x] `extension/manifest.json` を作成（MV3、storage 権限、host 権限）
 - [x] `src/content/index.js` と `content.css` を用意
 - [x] `src/storage/storageManager.js` の骨組みを作成
 - [x] `src/content/utils/` に `selectors.js`, `idParser.js`, `debounce.js` を作成
@@ -133,6 +133,6 @@
 ---
 
 ## 11. MVP リリース準備
-- [ ] `manifest.json` の最小権限確認
+- [ ] `extension/manifest.json` の最小権限確認
 - [ ] 拡張機能の読み込み・動作確認
 - [ ] MVP 機能の範囲を README などに簡潔に記載

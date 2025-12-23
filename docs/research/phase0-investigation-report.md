@@ -184,7 +184,7 @@ const result = phase0Investigator.runFullInvestigation();
 |----------|----------|
 | `src/content/utils/phase0Investigation.js` | 新規作成 - 調査スクリプト |
 | `src/content/utils/selectors.js` | 追加 - グループヘッダー/並べ替え用のセレクタ・定数 |
-| `docs/phase0-investigation-report.md` | 新規作成 - この報告書 |
+| `docs/research/phase0-investigation-report.md` | 新規作成 - この報告書 |
 
 ## 調査の推奨事項まとめ
 

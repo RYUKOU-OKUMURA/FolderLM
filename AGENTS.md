@@ -11,8 +11,8 @@ DOM 表示のみを操作し、NotebookLM の内部データには干渉しな�
 - Chrome / Edge (Chromium)
 
 ## Project Structure
-- 現在はドキュメント中心のリポジトリ
-- 実装は `src/` 配下に content script / storage / (任意) background を配置予定
+- 配布対象の拡張機能ファイルは `extension/` 配下（`manifest.json` / `src/` / `assets/`）
+- ドキュメントは `docs/` 配下（`plans/` / `reviews/` / `research/` / `guides/`）
 - UI 差し込みやノート検出の詳細はアーキテクチャ文書を参照
 
 ## Commands
@@ -25,6 +25,6 @@ DOM 表示のみを操作し、NotebookLM の内部データには干渉しな�
 - UI は軽量・非侵襲で、DOM 再描画は監視して復帰する
 
 ## Documentation
-- `要件定義書_清書.md`
-- `アーキテクチャ清書.md`
-- `MVPに向けた詳細な実装計画.md`
+- `docs/要件定義書_清書.md`
+- `docs/アーキテクチャ清書.md`
+- `docs/plans/MVP実装計画.md`
