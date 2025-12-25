@@ -316,9 +316,9 @@ class StorageManager {
    * フォルダ名を変更
    * @param {string} folderId - フォルダID
    * @param {string} newName - 新しいフォルダ名
-   * @returns {{ success: boolean, error?: string }}
+   * @returns {Promise<{ success: boolean, error?: string }>}
    */
-  renameFolder(folderId, newName) {
+  async renameFolder(folderId, newName) {
     const folder = this.getFolder(folderId);
     if (!folder) {
       return { success: false, error: 'フォルダが見つかりません' };
@@ -336,7 +336,7 @@ class StorageManager {
     }
 
     folder.name = validation.normalizedName;
-    this.save();
+    await this.saveImmediate();
 
     console.log('[FolderLM Storage] Folder renamed:', folder.name);
     return { success: true };

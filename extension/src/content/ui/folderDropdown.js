@@ -493,6 +493,11 @@ class FolderDropdown {
     errorDiv.className = 'folderlm-folder-edit-error';
     errorDiv.style.display = 'none';
 
+    // フォーム内のクリックが親に伝播しないようにする
+    form.addEventListener('click', (e) => {
+      e.stopPropagation();
+    });
+
     item.appendChild(form);
     item.appendChild(errorDiv);
 
@@ -502,10 +507,10 @@ class FolderDropdown {
       item.classList.remove('editing');
     };
 
-    form.addEventListener('submit', (e) => {
+    form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const newName = input.value.trim();
-      const result = storageManager.renameFolder(folderId, newName);
+      const result = await storageManager.renameFolder(folderId, newName);
       if (result.success) {
         this._render();
         this._positionDropdown();
